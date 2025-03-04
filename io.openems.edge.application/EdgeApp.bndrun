@@ -171,6 +171,7 @@
 	bnd.identity;id='io.openems.edge.meter.siemens',\
 	bnd.identity;id='io.openems.edge.meter.sma.shm20',\
 	bnd.identity;id='io.openems.edge.meter.socomec',\
+	bnd.identity;id='io.openems.edge.meter.sofar',\
 	bnd.identity;id='io.openems.edge.meter.sunspec',\
 	bnd.identity;id='io.openems.edge.meter.virtual',\
 	bnd.identity;id='io.openems.edge.meter.weidmueller',\
@@ -359,6 +360,7 @@
 	io.openems.edge.meter.siemens;version=snapshot,\
 	io.openems.edge.meter.sma.shm20;version=snapshot,\
 	io.openems.edge.meter.socomec;version=snapshot,\
+	io.openems.edge.meter.sofar;version=snapshot,\
 	io.openems.edge.meter.sunspec;version=snapshot,\
 	io.openems.edge.meter.virtual;version=snapshot,\
 	io.openems.edge.meter.weidmueller;version=snapshot,\

@@ -1,0 +1,6 @@
+= SOFAR PV Inverters (using Modbus protocols SOFAR HYD-3PH and SOFAR -G3)
+
+Implemented Natures:
+- ElectricityMeter
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.meter.sofar[Source Code icon:github[]]
