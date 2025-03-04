@@ -34,6 +34,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -y install wget apt-transport-https g
         libxrender1 \
         libxtst6
 
+# From https://community.openems.io/t/java-21-jdk-for-arm32/3253/4
 RUN curl -L -O https://openems.io/download/temurin-21-jre-armhf_21.0.6+2.deb && \
     DEBIAN_FRONTEND=noninteractive dpkg -i temurin-21-jre-armhf_21.0.6+2.deb
 
