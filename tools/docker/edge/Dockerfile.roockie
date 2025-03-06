@@ -1,0 +1,42 @@
+ARG BUILDPLATFORM=linux/amd64
+ARG JAVA_VERSION=21
+ARG JRE_VERSION=17
+
+
+### Build edge binary
+FROM --platform=$BUILDPLATFORM eclipse-temurin:${JAVA_VERSION}-alpine AS build_edge
+
+COPY . /src
+WORKDIR /src
+ENV OEMS_EDGE_OUTPUT=/opt/openems-edge.jar
+RUN --mount=type=bind,target=.,readwrite \
+    --mount=type=cache,target=/root/.gradle \
+        ./gradlew --no-build-cache buildEdge
+
+
+### Prepare edge container bases
+FROM arm32v7/eclipse-temurin:${JRE_VERSION}-jre AS jre-armv7
+FROM eclipse-temurin:${JRE_VERSION}-jre-alpine AS jre-amd64
+FROM eclipse-temurin:${JRE_VERSION}-jre-alpine AS jre-arm64
+
+
+### Build edge container
+ARG TARGETPLATFORM=linux/arm/v7 TARGETARCH=arm TARGETVARIANT=v7
+RUN echo "I'm building for $TARGETPLATFORM, $TARGETARCH, $TARGETVARIANT -> jre-${TARGETARCH}${TARGETVARIANT}"
+FROM jre-${TARGETARCH}${TARGETVARIANT}
+
+# OpenEMS Edge JAR
+COPY --from=build_edge /opt/ /opt/openems/
+
+# OpenEMS Edge configuration
+COPY tools/docker/edge/root/ /
+
+# Not needed (as we don't run s6): /etc/s6-overlay/s6-rc.d/{init-adduser,init-permissions,svc-openems-edge,user}
+#RUN find /etc/s6-overlay/s6-rc.d -type f -name 'run' -exec chmod +x {} \;
+
+VOLUME /var/opt/openems/config
+VOLUME /var/opt/openems/data
+
+EXPOSE 8080 8084 8085
+
+CMD ["java", "-jar", "-Dfelix.cm.dir=/var/opt/openems/config", "-Dopenems.data.dir=/var/opt/openems/data", "/opt/openems/openems-edge.jar"]
