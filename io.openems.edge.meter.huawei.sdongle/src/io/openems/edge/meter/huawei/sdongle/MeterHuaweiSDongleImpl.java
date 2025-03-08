@@ -26,6 +26,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.MeterType;
 import io.openems.common.types.OpenemsType;
+import io.openems.common.utils.FunctionUtils;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
@@ -36,6 +37,7 @@ import io.openems.edge.bridge.modbus.api.element.SignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.StringWordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
+import io.openems.edge.bridge.modbus.api.task.WaitTask;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
@@ -104,43 +106,44 @@ public class MeterHuaweiSDongleImpl extends AbstractOpenemsModbusComponent imple
 	@Override
 	protected ModbusProtocol defineModbusProtocol() {
 		var protocol = new ModbusProtocol(this, //
-
-				new FC3ReadRegistersTask(32069, Priority.HIGH, //
-						m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(32069), SCALE_FACTOR_MINUS_1), // Ua
-						m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(32070), SCALE_FACTOR_MINUS_1), // Ub
-						m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(32071), SCALE_FACTOR_MINUS_1), // Uc
-						m(ElectricityMeter.ChannelId.CURRENT_L1, new SignedDoublewordElement(32072), SCALE_FACTOR_MINUS_3), // Ia
-						m(ElectricityMeter.ChannelId.CURRENT_L2, new SignedDoublewordElement(32074), SCALE_FACTOR_MINUS_3), // Ib
-						m(ElectricityMeter.ChannelId.CURRENT_L3, new SignedDoublewordElement(32076), SCALE_FACTOR_MINUS_3), // Ic
-						new DummyRegisterElement(32078, 32079), // Active power peak of current	day
-						m(ElectricityMeter.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(32080)), // Active power
-						m(ElectricityMeter.ChannelId.REACTIVE_POWER, new SignedDoublewordElement(32082)), // Reactive power
-						new DummyRegisterElement(32084, 32084), // Power factor
-						m(ElectricityMeter.ChannelId.FREQUENCY, new UnsignedWordElement(32085), SCALE_FACTOR_2) // Frequency
-				), //
-
-				new FC3ReadRegistersTask(32106, Priority.HIGH, //
-						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, new SignedDoublewordElement(32106), SCALE_FACTOR_1) // E-Total
-				) //
+			new FC3ReadRegistersTask(32069, Priority.LOW, //
+				m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(32069), SCALE_FACTOR_MINUS_1), // Ua
+				m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(32070), SCALE_FACTOR_MINUS_1), // Ub
+				m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(32071), SCALE_FACTOR_MINUS_1), // Uc
+				m(ElectricityMeter.ChannelId.CURRENT_L1, new SignedDoublewordElement(32072), SCALE_FACTOR_MINUS_3), // Ia
+				m(ElectricityMeter.ChannelId.CURRENT_L2, new SignedDoublewordElement(32074), SCALE_FACTOR_MINUS_3), // Ib
+				m(ElectricityMeter.ChannelId.CURRENT_L3, new SignedDoublewordElement(32076), SCALE_FACTOR_MINUS_3), // Ic
+				new DummyRegisterElement(32078, 32079), // Active power peak of current	day
+				m(ElectricityMeter.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(32080)), // Active power
+				m(ElectricityMeter.ChannelId.REACTIVE_POWER, new SignedDoublewordElement(32082)), // Reactive power
+				new DummyRegisterElement(32084, 32084), // Power factor
+				m(ElectricityMeter.ChannelId.FREQUENCY, new UnsignedWordElement(32085), SCALE_FACTOR_2), // Frequency
+				new DummyRegisterElement(32086, 32105), // Inverter efficiency, Cabinet temperature, Insulation Resistance, Device status, Fault code, Startup time, Shutdown time
+					m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, new SignedDoublewordElement(32106), SCALE_FACTOR_1) // E-Total
+			) //
 		);
 
 		// Read serial number once
 		readElementOnce(FC3, protocol, ModbusUtils::retryOnNull, new StringWordElement(30015, 10)) //
-				.thenAccept(value -> {
-					this.serial = TypeUtils.<String>getAsType(OpenemsType.STRING, value);
-					if (this.serial == null) {
-						this.logWarn(this.log, "Serial: null");
-					} else {
-						this.logInfo(this.log, "Serial: " + this.serial);
-					} //
-				});
+			.thenAccept(value -> { //
+				this.serial = TypeUtils.<String>getAsType(OpenemsType.STRING, value);
+				if (this.serial == null) {
+					this.logWarn(this.log, "Serial: null");
+				} else {
+					this.logInfo(this.log, "Serial: " + this.serial);
+				} //
+			});
 
 		return protocol;
 	}
 
 	@Override
 	public String debugLog() {
-		return "L:" + this.getActivePower().asString();
+		return "AP:" + this.getActivePower().asString() + " RP:" + this.getReactivePower().asString() + " E:" + this.getActiveProductionEnergy().asString() + " F:" + this.getFrequency().asString() +
+				" V:" + this.getVoltage().asString() + " A:" + this.getCurrent().asString() + 
+				" V1:" + this.getVoltageL1().asString() + " A1:" + this.getCurrentL1().asString() + " P1:" + this.getActivePowerL1().asString() + " RP1:" + this.getReactivePowerL1().asString() +
+				" V2:" + this.getVoltageL2().asString() + " A2:" + this.getCurrentL2().asString() + " P2:" + this.getActivePowerL2().asString() + " RP2:" + this.getReactivePowerL2().asString() +
+				" V3:" + this.getVoltageL3().asString() + " A3:" + this.getCurrentL2().asString() + " P2:" + this.getActivePowerL2().asString() + " RP3:" + this.getReactivePowerL3().asString();
 	}
 
 	@Override
