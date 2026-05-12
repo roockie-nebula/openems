@@ -1,0 +1,61 @@
+ARG BUILDPLATFORM=linux/amd64
+ARG JAVA_VERSION=21
+ARG JRE_VERSION=21
+
+
+### Build edge binary
+FROM --platform=$BUILDPLATFORM eclipse-temurin:${JAVA_VERSION}-alpine AS build_edge
+
+COPY . /src
+WORKDIR /src
+ENV OEMS_EDGE_OUTPUT=/opt/openems-edge.jar
+RUN --mount=type=bind,target=.,readwrite \
+    --mount=type=cache,target=/root/.gradle \
+        ./gradlew --no-build-cache buildEdge
+
+
+### Prepare edge container bases
+FROM eclipse-temurin:${JRE_VERSION}-jre-alpine AS jre-amd64
+FROM eclipse-temurin:${JRE_VERSION}-jre-alpine AS jre-arm64
+FROM --platform=linux/arm/v7 debian:bookworm AS jre-armv7
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y update && apt-get -y install curl
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install wget apt-transport-https gpg && \
+    (wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor | tee /etc/apt/trusted.gpg.d/adoptium.gpg > /dev/null) && \
+    (echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list) && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y update && apt-get -y install \
+        adoptium-ca-certificates \
+        java-common \
+        libasound2 \
+        libfontconfig1 \
+        libfreetype6 \
+        libx11-6 \
+        libxext6 \
+        libxi6 \
+        libxrender1 \
+        libxtst6
+
+# From https://community.openems.io/t/java-21-jdk-for-arm32/3253/4
+RUN curl -L -O https://openems.io/download/temurin-21-jre-armhf_21.0.6+2.deb && \
+    DEBIAN_FRONTEND=noninteractive dpkg -i temurin-21-jre-armhf_21.0.6+2.deb
+
+
+### Build edge container
+ARG TARGETPLATFORM=linux/arm/v7 TARGETARCH=arm TARGETVARIANT=v7
+RUN echo "I'm building for $TARGETPLATFORM, $TARGETARCH, $TARGETVARIANT -> jre-${TARGETARCH}${TARGETVARIANT}"
+FROM jre-${TARGETARCH}${TARGETVARIANT}
+
+# OpenEMS Edge JAR
+COPY --from=build_edge /opt/ /opt/openems/
+
+# OpenEMS Edge configuration
+COPY tools/docker/edge/root/ /
+
+# Not needed (as we don't run s6): /etc/s6-overlay/s6-rc.d/{init-adduser,init-permissions,svc-openems-edge,user}
+#RUN find /etc/s6-overlay/s6-rc.d -type f -name 'run' -exec chmod +x {} \;
+
+VOLUME /var/opt/openems/config
+VOLUME /var/opt/openems/data
+
+EXPOSE 8080 8084 8085
+
+CMD ["java", "-jar", "-Dfelix.cm.dir=/var/opt/openems/config", "-Dopenems.data.dir=/var/opt/openems/data", "/opt/openems/openems-edge.jar"]
