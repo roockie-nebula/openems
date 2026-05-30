@@ -1,5 +1,7 @@
 package io.openems.edge.meter.dsmr;
 
+import java.io.IOException;
+
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -9,7 +11,10 @@ import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fazecast.jSerialComm.SerialPort;
+
 import io.openems.common.types.MeterType;
+import io.openems.common.worker.AbstractImmediateWorker;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.meter.api.ElectricityMeter;
@@ -23,9 +28,17 @@ import io.openems.edge.meter.api.ElectricityMeter;
 public class MeterDsmrImpl extends AbstractOpenemsComponent
 		implements MeterDsmr, ElectricityMeter, OpenemsComponent {
 
+	private static final int BAUD_RATE = 115200;
+	// Longer than the ~1s DSMR 5.0 push interval, so a missing telegram is treated
+	// as a communication fault rather than a normal idle gap.
+	private static final int READ_TIMEOUT_MS = 15_000;
+
 	private final Logger log = LoggerFactory.getLogger(MeterDsmrImpl.class);
+	private final ReadWorker worker = new ReadWorker();
 
 	private MeterType meterType = MeterType.GRID;
+	private String port;
+	private SerialPort serialPort;
 
 	public MeterDsmrImpl() {
 		super(//
@@ -39,13 +52,78 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 	private void activate(ComponentContext context, Config config) {
 		super.activate(context, config.id(), config.alias(), config.enabled());
 		this.meterType = config.type();
-		// Serial worker started in Task 7
+		this.port = config.port();
+		if (config.enabled()) {
+			this.worker.activate(config.id());
+		}
 	}
 
 	@Override
 	@Deactivate
 	protected void deactivate() {
+		this.worker.deactivate();
+		this.closePort();
 		super.deactivate();
+	}
+
+	/**
+	 * Reads telegrams from the serial port and applies them. On I/O error it flags
+	 * {@link MeterDsmr.ChannelId#COMMUNICATION_FAILED}, nulls the live channels and
+	 * rethrows so the worker backs off before the next reopen attempt.
+	 */
+	private class ReadWorker extends AbstractImmediateWorker {
+
+		private TelegramReader reader;
+
+		@Override
+		protected void forever() throws Throwable {
+			try {
+				if (!MeterDsmrImpl.this.isPortOpen()) {
+					MeterDsmrImpl.this.openPort();
+					this.reader = new TelegramReader(MeterDsmrImpl.this.serialPort.getInputStream());
+				}
+				MeterDsmrImpl.this.applyTelegram(this.reader.readTelegram());
+			} catch (IOException e) {
+				MeterDsmrImpl.this.onReadFault();
+				throw e;
+			}
+		}
+	}
+
+	private boolean isPortOpen() {
+		return this.serialPort != null && this.serialPort.isOpen();
+	}
+
+	private void openPort() throws IOException {
+		var sp = SerialPort.getCommPort(this.port);
+		sp.setComPortParameters(BAUD_RATE, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
+		sp.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, READ_TIMEOUT_MS, 0);
+		if (!sp.openPort()) {
+			throw new IOException("Unable to open serial port [" + this.port + "]");
+		}
+		this.serialPort = sp;
+	}
+
+	private void closePort() {
+		if (this.serialPort != null) {
+			this.serialPort.closePort();
+			this.serialPort = null;
+		}
+	}
+
+	private void onReadFault() {
+		this._setCommunicationFailed(true);
+		this._setActivePower(null);
+		this._setActivePowerL1(null);
+		this._setActivePowerL2(null);
+		this._setActivePowerL3(null);
+		this._setVoltageL1(null);
+		this._setVoltageL2(null);
+		this._setVoltageL3(null);
+		this._setCurrentL1(null);
+		this._setCurrentL2(null);
+		this._setCurrentL3(null);
+		this.closePort();
 	}
 
 	@Override

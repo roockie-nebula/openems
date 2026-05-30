@@ -8,7 +8,7 @@ Bundle-Version: 1.0.0.${tstamp}
 	io.openems.common,\
 	io.openems.edge.common,\
 	io.openems.edge.meter.api,\
-	org.openmuc.jrxtx;version=1.0,\
+	com.fazecast.jSerialComm,\
 
 -testpath: \
 	${testpath}
