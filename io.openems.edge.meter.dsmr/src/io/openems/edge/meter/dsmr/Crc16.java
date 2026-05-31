@@ -9,6 +9,14 @@ public final class Crc16 {
 	private Crc16() {
 	}
 
+	/**
+	 * Calculates the DSMR CRC16 over the first {@code length} bytes of
+	 * {@code data}.
+	 *
+	 * @param data   the bytes to checksum
+	 * @param length the number of leading bytes to include
+	 * @return the 16-bit CRC as an unsigned int
+	 */
 	public static int calculate(byte[] data, int length) {
 		var crc = 0x0000;
 		for (var i = 0; i < length; i++) {

@@ -172,7 +172,7 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 		this._setCommunicationFailed(false);
 	}
 
-	/** (plus - minus) kW -&gt; W; null if neither present. */
+	// (plus - minus) kW -> W; null if neither present.
 	private static Integer toWatt(Telegram t, String plusObis, String minusObis) {
 		var plus = t.getAsDouble(plusObis);
 		var minus = t.getAsDouble(minusObis);
@@ -183,13 +183,13 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 		return (int) Math.round(value * 1000.0);
 	}
 
-	/** V-&gt;mV or A-&gt;mA (x1000); null if absent. */
+	// V -> mV or A -> mA (x1000); null if absent.
 	private static Integer toMilli(Telegram t, String obis) {
 		var v = t.getAsDouble(obis);
 		return v.map(d -> (int) Math.round(d * 1000.0)).orElse(null);
 	}
 
-	/** (a + b) kWh -&gt; Wh; null if both absent. */
+	// (a + b) kWh -> Wh; null if both absent.
 	private static Long toWattHours(Telegram t, String obisA, String obisB) {
 		var a = t.getAsDouble(obisA);
 		var b = t.getAsDouble(obisB);
