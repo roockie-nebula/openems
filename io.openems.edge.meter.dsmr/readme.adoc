@@ -1,0 +1,15 @@
+= Meter DSMR
+
+Reads a Dutch Smart Meter (DSMR 5.0) over its P1 serial port.
+
+The meter pushes a telegram autonomously (~1s on DSMR 5.0). The component reads
+the serial stream via jSerialComm, validates the CRC16, parses the OBIS values
+and maps them to the `ElectricityMeter` channels (grid: positive = buy-from-grid,
+negative = feed-to-grid).
+
+Serial settings: 115200 baud, 8N1.
+
+Implemented Natures:
+- ElectricityMeter
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.meter.dsmr[Source Code icon:github[]]
