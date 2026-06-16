@@ -1,0 +1,29 @@
+= Meter Scheco
+
+Reads electricity and heat sub-meters from a Scheco AG Modbus/TCP gateway.
+
+The gateway is a single Modbus slave (default unit-id 10) that exposes 12
+sub-meters. Each component instance reads exactly one sub-meter and maps it onto
+the standard `ElectricityMeter` channels. Add one instance per sub-meter, all
+pointing at the same Modbus bridge.
+
+Each sub-meter occupies 4 contiguous holding registers (read via FC3): a 32-bit
+energy value (1/10 kWh) followed by a 32-bit power value (W). Both are read as
+signed values in the Modbus default word order (MSWLSW); register addresses,
+scale and word order follow the vendor specification in `doc/scheco.pdf`.
+
+This bundle is consumption-oriented (default `MeterType.CONSUMPTION_METERED`,
+where positive power means consumption). The gateway exposes a single cumulative
+counter per sub-meter, so energy is always mapped to `ACTIVE_CONSUMPTION_ENERGY`
+(scaled to Wh) and power to `ACTIVE_POWER`. The `invert` option negates only the
+power sign (e.g. to correct a reversed measurement convention); it does not move
+energy to the production channel, as a single counter cannot be split into
+import/export.
+
+The 5 `HEAT_*` sub-meters are thermal (Wärmezähler); as OpenEMS has no
+heat-meter nature they map onto the same generic W/Wh channels.
+
+Implemented Natures:
+- ElectricityMeter
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.meter.scheco[Source Code icon:github[]]
