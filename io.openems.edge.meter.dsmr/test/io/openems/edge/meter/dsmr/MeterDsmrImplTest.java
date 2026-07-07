@@ -1,6 +1,8 @@
 package io.openems.edge.meter.dsmr;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -23,8 +25,7 @@ public class MeterDsmrImplTest {
 			+ "1-0:22.7.0(00.000*kW)\r\n" //
 			+ "!";
 
-	@Test
-	public void mapsTelegramToChannels() throws Exception {
+	private static MeterDsmrImpl activatedMeter() throws Exception {
 		var sut = new MeterDsmrImpl();
 		new ComponentTest(sut) //
 				.activate(MyConfig.create() //
@@ -33,6 +34,12 @@ public class MeterDsmrImplTest {
 						.setType(MeterType.GRID) //
 						.setPort("/dev/null") //
 						.build());
+		return sut;
+	}
+
+	@Test
+	public void mapsTelegramToChannels() throws Exception {
+		var sut = activatedMeter();
 
 		sut.applyTelegram(TelegramTest.withValidCrc(TELEGRAM_BODY));
 
@@ -48,5 +55,32 @@ public class MeterDsmrImplTest {
 		assertEquals(358023L, (long) sut.getActiveProductionEnergyChannel().getNextValue().get());
 		// Export 2.8.x -> ConsumptionEnergy = (12.3 + 45.6) kWh -> 57900 Wh
 		assertEquals(57900L, (long) sut.getActiveConsumptionEnergyChannel().getNextValue().get());
+	}
+
+	@Test
+	public void crcErrorIsDebouncedUntilGraceElapses() throws Exception {
+		var sut = activatedMeter();
+
+		var good = TelegramTest.withValidCrc(TELEGRAM_BODY);
+		// Same body, deliberately wrong CRC -> fails validation like a corrupted frame.
+		var bad = TelegramTest.withInvalidCrc(TELEGRAM_BODY);
+
+		// A valid telegram clears CrcError and marks the link healthy.
+		sut.applyTelegram(good, 0L);
+		assertFalse(sut.getCrcErrorChannel().getNextValue().get());
+
+		// Corrupted telegrams within the grace window keep last-good values, no WARNING.
+		sut.applyTelegram(bad, 1_000L);
+		sut.applyTelegram(bad, 5_000L);
+		assertFalse(sut.getCrcErrorChannel().getNextValue().get());
+		assertEquals(1193, (int) sut.getActivePowerChannel().getNextValue().get());
+
+		// Sustained corruption past the grace window raises CrcError.
+		sut.applyTelegram(bad, 16_000L);
+		assertTrue(sut.getCrcErrorChannel().getNextValue().get());
+
+		// A single valid telegram clears it again.
+		sut.applyTelegram(good, 17_000L);
+		assertFalse(sut.getCrcErrorChannel().getNextValue().get());
 	}
 }

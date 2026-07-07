@@ -1,5 +1,6 @@
 package io.openems.edge.meter.dsmr;
 
+import java.io.EOFException;
 import java.io.IOException;
 
 import org.osgi.service.component.ComponentContext;
@@ -28,17 +29,26 @@ import io.openems.edge.meter.api.ElectricityMeter;
 public class MeterDsmrImpl extends AbstractOpenemsComponent
 		implements MeterDsmr, ElectricityMeter, OpenemsComponent {
 
-	private static final int BAUD_RATE = 115200;
 	// Longer than the ~1s DSMR 5.0 push interval, so a missing telegram is treated
 	// as a communication fault rather than a normal idle gap.
 	private static final int READ_TIMEOUT_MS = 15_000;
+	// On an electrically noisy P1 link, occasional CRC failures are normal: the bad
+	// telegram is discarded and the last-good values are kept. CrcError (WARNING) is
+	// only raised once NO valid telegram has arrived for this long, i.e. the link is
+	// alive but delivering nothing usable. Prevents the state flapping on every
+	// corrupted frame while still surfacing a genuinely unusable link.
+	private static final long CRC_ERROR_GRACE_MS = 15_000;
 
 	private final Logger log = LoggerFactory.getLogger(MeterDsmrImpl.class);
 	private final ReadWorker worker = new ReadWorker();
 
 	private MeterType meterType = MeterType.GRID;
+	private DsmrVersion dsmrVersion = DsmrVersion.V5_0;
 	private String port;
 	private SerialPort serialPort;
+	// Monotonic timestamp (ms) of the last CRC-valid telegram, used to debounce
+	// CrcError. Only touched from the single worker thread.
+	private long lastValidTelegramMs;
 
 	public MeterDsmrImpl() {
 		super(//
@@ -52,7 +62,9 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 	private void activate(ComponentContext context, Config config) {
 		super.activate(context, config.id(), config.alias(), config.enabled());
 		this.meterType = config.type();
+		this.dsmrVersion = config.dsmrVersion();
 		this.port = config.port();
+		this.lastValidTelegramMs = monotonicMillis();
 		if (config.enabled()) {
 			this.worker.activate(config.id());
 		}
@@ -80,10 +92,27 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 			try {
 				if (!MeterDsmrImpl.this.isPortOpen()) {
 					MeterDsmrImpl.this.openPort();
-					this.reader = new TelegramReader(MeterDsmrImpl.this.serialPort.getInputStream());
+					var sp = MeterDsmrImpl.this.serialPort;
+					MeterDsmrImpl.this.log.info("DSMR [{}] serial port opened ({} baud)",
+							MeterDsmrImpl.this.port, sp.getBaudRate());
+					this.reader = new TelegramReader(sp.getInputStream());
+					// Grant a fresh CrcError grace window after each (re)connect.
+					MeterDsmrImpl.this.lastValidTelegramMs = monotonicMillis();
 				}
 				MeterDsmrImpl.this.applyTelegram(this.reader.readTelegram());
+			} catch (EOFException e) {
+				// readLine() returned null => native read() returned -1. Per jSerialComm this
+				// is a device error/disconnect, NOT an idle timeout. Log the OS errno so we can
+				// tell contention (EBUSY/EAGAIN) from a vanished device (EIO/ENXIO/EBADF).
+				var sp = MeterDsmrImpl.this.serialPort;
+				MeterDsmrImpl.this.log.error("DSMR [{}] read EOF: portOpen={}, errno={}, errLoc={}",
+						MeterDsmrImpl.this.port, MeterDsmrImpl.this.isPortOpen(),
+						sp != null ? sp.getLastErrorCode() : -1, sp != null ? sp.getLastErrorLocation() : -1);
+				MeterDsmrImpl.this.onReadFault();
+				throw e;
 			} catch (IOException e) {
+				// SerialPortTimeoutException lands here (idle >15s, i.e. no data at all).
+				MeterDsmrImpl.this.log.error("DSMR [{}] read I/O error: {}", MeterDsmrImpl.this.port, e.toString());
 				MeterDsmrImpl.this.onReadFault();
 				throw e;
 			}
@@ -96,8 +125,10 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 
 	private void openPort() throws IOException {
 		var sp = SerialPort.getCommPort(this.port);
-		sp.setComPortParameters(BAUD_RATE, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
-		sp.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, READ_TIMEOUT_MS, 0);
+		this.dsmrVersion.configure(sp);
+		// SEMI_BLOCKING returns as soon as any bytes are available, so telegrams flow
+		// at the meter's ~1s cadence; the timeout still surfaces a dead link as a fault.
+		sp.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, READ_TIMEOUT_MS, 0);
 		if (!sp.openPort()) {
 			throw new IOException("Unable to open serial port [" + this.port + "]");
 		}
@@ -138,11 +169,28 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 	 * @param raw the raw telegram text
 	 */
 	protected void applyTelegram(String raw) {
+		this.applyTelegram(raw, monotonicMillis());
+	}
+
+	/**
+	 * Parses a raw telegram at the given monotonic time. Split out from
+	 * {@link #applyTelegram(String)} so the CrcError debounce can be tested with a
+	 * controlled clock.
+	 *
+	 * @param raw   the raw telegram text
+	 * @param nowMs the current monotonic timestamp in milliseconds
+	 */
+	void applyTelegram(String raw, long nowMs) {
 		Telegram t;
 		try {
 			t = Telegram.parse(raw);
 		} catch (CrcMismatchException e) {
-			this._setCrcError(true);
+			// Discard the corrupted telegram and keep the last-good values. Only raise
+			// CrcError once the link has gone silent-but-noisy past the grace period.
+			if (nowMs - this.lastValidTelegramMs >= CRC_ERROR_GRACE_MS) {
+				this._setCrcError(true);
+			}
+			this.log.debug("DSMR [{}] discarding telegram: {}", this.port, e.getMessage());
 			return;
 		} catch (DsmrException e) {
 			this.log.debug("Malformed telegram: {}", e.getMessage());
@@ -170,6 +218,16 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 
 		this._setCrcError(false);
 		this._setCommunicationFailed(false);
+		this.lastValidTelegramMs = nowMs;
+	}
+
+	/**
+	 * A monotonic millisecond clock, immune to wall-clock/NTP steps.
+	 *
+	 * @return the current value in milliseconds
+	 */
+	private static long monotonicMillis() {
+		return System.nanoTime() / 1_000_000L;
 	}
 
 	// (plus - minus) kW -> W; null if neither present.

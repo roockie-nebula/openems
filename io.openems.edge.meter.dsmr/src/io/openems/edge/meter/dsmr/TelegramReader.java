@@ -14,6 +14,12 @@ import java.nio.charset.StandardCharsets;
  */
 public class TelegramReader {
 
+	// A well-formed DSMR telegram is ~1-2 KB. If accumulation runs well past that
+	// without a terminator, a '!' was lost to line noise (or noise injected a burst
+	// of bytes); abandon the partial telegram and resync on the next '/' so a single
+	// corrupted frame cannot swallow the telegrams that follow it.
+	private static final int MAX_TELEGRAM_LENGTH = 4096;
+
 	private final BufferedReader reader;
 
 	public TelegramReader(InputStream in) {
@@ -42,6 +48,10 @@ public class TelegramReader {
 			sb.append(line).append("\r\n");
 			if (line.startsWith("!")) {
 				return sb.toString();
+			}
+			if (sb.length() > MAX_TELEGRAM_LENGTH) {
+				sb.setLength(0);
+				started = false;
 			}
 		}
 		throw new EOFException("Stream closed before telegram completed");

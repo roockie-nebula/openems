@@ -32,6 +32,11 @@ public class TelegramTest {
 		return body + String.format("%04X", Crc16.calculate(bytes, bytes.length)) + "\r\n";
 	}
 
+	static String withInvalidCrc(String body) {
+		var bytes = body.getBytes(US_ASCII);
+		return body + String.format("%04X", Crc16.calculate(bytes, bytes.length) ^ 0x1) + "\r\n";
+	}
+
 	@Test
 	public void parsesObisValues() throws Exception {
 		var t = Telegram.parse(withValidCrc(BODY));
@@ -44,9 +49,7 @@ public class TelegramTest {
 
 	@Test
 	public void rejectsBadCrc() {
-		var bytes = BODY.getBytes(US_ASCII);
-		var bad = BODY + String.format("%04X", Crc16.calculate(bytes, bytes.length) ^ 0x1) + "\r\n";
-		assertThrows(CrcMismatchException.class, () -> Telegram.parse(bad));
+		assertThrows(CrcMismatchException.class, () -> Telegram.parse(withInvalidCrc(BODY)));
 	}
 
 	@Test
