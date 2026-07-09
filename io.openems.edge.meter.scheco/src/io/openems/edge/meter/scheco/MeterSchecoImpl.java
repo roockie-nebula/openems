@@ -59,6 +59,11 @@ public class MeterSchecoImpl extends AbstractOpenemsModbusComponent
 	@Activate
 	private void activate(ComponentContext context, Config config) throws OpenemsException {
 		this.config = config;
+		if (config.meter() == SubMeter.CUSTOM
+				&& (config.customEnergyAddress() < 0 || config.customEnergyAddress() > 65533)) {
+			throw new OpenemsException(
+					"Custom energy register address [" + config.customEnergyAddress() + "] must be within 0..65533");
+		}
 		// super.activate(...) returns true while the Modbus bridge reference is not yet
 		// bound; the protocol is (re)built once it becomes available, so stop early here.
 		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
@@ -81,8 +86,10 @@ public class MeterSchecoImpl extends AbstractOpenemsModbusComponent
 	@Override
 	protected ModbusProtocol defineModbusProtocol() {
 		var meter = this.config.meter();
-		var energyAddress = meter.getEnergyAddress();
-		var powerAddress = meter.getPowerAddress();
+		var energyAddress = meter == SubMeter.CUSTOM //
+				? this.config.customEnergyAddress() //
+				: meter.getEnergyAddress();
+		var powerAddress = energyAddress + 2;
 		return new ModbusProtocol(this, //
 				new FC3ReadRegistersTask(energyAddress, Priority.HIGH, //
 						m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY,
@@ -93,6 +100,10 @@ public class MeterSchecoImpl extends AbstractOpenemsModbusComponent
 
 	@Override
 	public String debugLog() {
-		return this.config.meter().getLabel() + ":" + this.getActivePower().asString();
+		var meter = this.config.meter();
+		var label = meter == SubMeter.CUSTOM //
+				? "Custom@" + this.config.customEnergyAddress() //
+				: meter.getLabel();
+		return label + ":" + this.getActivePower().asString();
 	}
 }

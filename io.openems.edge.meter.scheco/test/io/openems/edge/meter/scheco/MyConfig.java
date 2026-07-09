@@ -13,6 +13,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int modbusUnitId;
 		private MeterType type;
 		private SubMeter meter;
+		private int customEnergyAddress;
 		private boolean invert;
 
 		private Builder() {
@@ -40,6 +41,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setMeter(SubMeter meter) {
 			this.meter = meter;
+			return this;
+		}
+
+		public Builder setCustomEnergyAddress(int customEnergyAddress) {
+			this.customEnergyAddress = customEnergyAddress;
 			return this;
 		}
 
@@ -92,6 +98,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public SubMeter meter() {
 		return this.builder.meter;
+	}
+
+	@Override
+	public int customEnergyAddress() {
+		return this.builder.customEnergyAddress;
 	}
 
 	@Override

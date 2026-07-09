@@ -2,6 +2,7 @@ package io.openems.edge.meter.scheco;
 
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
+import org.osgi.service.metatype.annotations.Option;
 
 import io.openems.common.types.MeterType;
 
@@ -20,8 +21,25 @@ import io.openems.common.types.MeterType;
 	@AttributeDefinition(name = "Meter-Type", description = "Grid, Production, Consumption. Defaults to Consumption (metered).")
 	MeterType type() default MeterType.CONSUMPTION_METERED;
 
-	@AttributeDefinition(name = "Sub-Meter", description = "Which sub-meter of the gateway to read")
+	@AttributeDefinition(name = "Sub-Meter", description = "Which sub-meter of the gateway to read", options = {
+			@Option(label = "Elektrozähler Hauptsteuerung", value = "MAIN_CONTROL"), //
+			@Option(label = "Elektrozähler Wärmepumpe", value = "HEAT_PUMP"), //
+			@Option(label = "Elektrozähler Küche", value = "KITCHEN"), //
+			@Option(label = "Elektrozähler Zuleitung Hauseinspeisung", value = "HOUSE_SUPPLY"), //
+			@Option(label = "Elektrozähler Abgang Lüftungsanlage", value = "VENTILATION"), //
+			@Option(label = "Elektrozähler Abgang GWK", value = "GWK"), //
+			@Option(label = "Elektrozähler öffentliche Toiletten", value = "WC"), //
+			@Option(label = "Wärmezähler Wärmepumpe (WZ 1.1)", value = "HEAT_WZ_HEAT_PUMP"), //
+			@Option(label = "Wärmezähler Warmwasser (WZ 1.2)", value = "HEAT_WZ_HOT_WATER"), //
+			@Option(label = "Wärmezähler FBH (WZ 1.3)", value = "HEAT_WZ_FLOOR_HEATING"), //
+			@Option(label = "Wärmezähler AWN Gew. Kälte (WZ 2.1)", value = "HEAT_WZ_COOLING"), //
+			@Option(label = "Wärmezähler KVS (WZ 3.1)", value = "HEAT_WZ_KVS"), //
+			@Option(label = "Benutzerdefinierte Adresse (Custom)", value = "CUSTOM") //
+	})
 	SubMeter meter() default SubMeter.MAIN_CONTROL;
+
+	@AttributeDefinition(name = "Custom energy register address", description = "Holding-register address (0-65533) of the 32-bit energy value; the power value is read at address + 2. Only used when Sub-Meter is 'Benutzerdefinierte Adresse (Custom)'.")
+	int customEnergyAddress() default 0;
 
 	@AttributeDefinition(name = "Modbus-ID", description = "Id of the modbus bridge")
 	String modbus_id() default "modbus0";

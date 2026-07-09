@@ -23,6 +23,12 @@ import/export.
 The 5 `HEAT_*` sub-meters are thermal (Wärmezähler); as OpenEMS has no
 heat-meter nature they map onto the same generic W/Wh channels.
 
+The `CUSTOM` sub-meter option reads a user-defined register pair: the config
+property `customEnergyAddress` (0-65533) is used as the energy register
+address and the power value is read at address + 2, with the same format as
+all documented sub-meters. This allows reading pairs added in future revisions
+of the vendor register list without a software update.
+
 Implemented Natures:
 - ElectricityMeter
 
