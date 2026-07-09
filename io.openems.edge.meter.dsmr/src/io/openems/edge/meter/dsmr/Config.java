@@ -28,5 +28,8 @@ import io.openems.common.types.MeterType;
 	@AttributeDefinition(name = "DSMR version", description = "Telegram format version")
 	DsmrVersion dsmrVersion() default DsmrVersion.V5_0;
 
+	@AttributeDefinition(name = "Invert Power", description = "Inverts all Power values and swaps Production and Consumption Energy, i.e. Power is multiplied with -1.")
+	boolean invert() default false;
+
 	String webconsole_configurationFactory_nameHint() default "Meter DSMR [{id}]";
 }

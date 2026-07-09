@@ -9,6 +9,10 @@ negative = feed-to-grid).
 
 Serial settings: 115200 baud, 8N1.
 
+The `invert` config option multiplies all power values with -1 and swaps
+Production and Consumption Energy, e.g. for meters installed in reverse
+direction.
+
 Implemented Natures:
 - ElectricityMeter
 

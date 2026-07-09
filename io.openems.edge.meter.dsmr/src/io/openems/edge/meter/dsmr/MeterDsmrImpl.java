@@ -45,6 +45,7 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 	private MeterType meterType = MeterType.GRID;
 	private DsmrVersion dsmrVersion = DsmrVersion.V5_0;
 	private String port;
+	private boolean invert;
 	private SerialPort serialPort;
 	// Monotonic timestamp (ms) of the last CRC-valid telegram, used to debounce
 	// CrcError. Only touched from the single worker thread.
@@ -64,6 +65,7 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 		this.meterType = config.type();
 		this.dsmrVersion = config.dsmrVersion();
 		this.port = config.port();
+		this.invert = config.invert();
 		this.lastValidTelegramMs = monotonicMillis();
 		if (config.enabled()) {
 			this.worker.activate(config.id());
@@ -197,10 +199,10 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 			return;
 		}
 
-		this._setActivePower(toWatt(t, "1-0:1.7.0", "1-0:2.7.0"));
-		this._setActivePowerL1(toWatt(t, "1-0:21.7.0", "1-0:22.7.0"));
-		this._setActivePowerL2(toWatt(t, "1-0:41.7.0", "1-0:42.7.0"));
-		this._setActivePowerL3(toWatt(t, "1-0:61.7.0", "1-0:62.7.0"));
+		this._setActivePower(this.applyInvert(toWatt(t, "1-0:1.7.0", "1-0:2.7.0")));
+		this._setActivePowerL1(this.applyInvert(toWatt(t, "1-0:21.7.0", "1-0:22.7.0")));
+		this._setActivePowerL2(this.applyInvert(toWatt(t, "1-0:41.7.0", "1-0:42.7.0")));
+		this._setActivePowerL3(this.applyInvert(toWatt(t, "1-0:61.7.0", "1-0:62.7.0")));
 
 		this._setVoltageL1(toMilli(t, "1-0:32.7.0"));
 		this._setVoltageL2(toMilli(t, "1-0:52.7.0"));
@@ -212,13 +214,23 @@ public class MeterDsmrImpl extends AbstractOpenemsComponent
 
 		// GRID convention: ProductionEnergy = integral of positive (buy-from-grid)
 		// power, so the import register 1.8.x maps to ProductionEnergy and the export
-		// register 2.8.x maps to ConsumptionEnergy.
-		this._setActiveProductionEnergy(toWattHours(t, "1-0:1.8.1", "1-0:1.8.2"));
-		this._setActiveConsumptionEnergy(toWattHours(t, "1-0:2.8.1", "1-0:2.8.2"));
+		// register 2.8.x maps to ConsumptionEnergy. With 'invert' the mapping is
+		// swapped.
+		var importEnergy = toWattHours(t, "1-0:1.8.1", "1-0:1.8.2");
+		var exportEnergy = toWattHours(t, "1-0:2.8.1", "1-0:2.8.2");
+		this._setActiveProductionEnergy(this.invert ? exportEnergy : importEnergy);
+		this._setActiveConsumptionEnergy(this.invert ? importEnergy : exportEnergy);
 
 		this._setCrcError(false);
 		this._setCommunicationFailed(false);
 		this.lastValidTelegramMs = nowMs;
+	}
+
+	private Integer applyInvert(Integer value) {
+		if (value == null) {
+			return null;
+		}
+		return this.invert ? -value : value;
 	}
 
 	/**

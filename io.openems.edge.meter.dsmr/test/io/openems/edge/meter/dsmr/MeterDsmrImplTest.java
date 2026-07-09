@@ -26,6 +26,10 @@ public class MeterDsmrImplTest {
 			+ "!";
 
 	private static MeterDsmrImpl activatedMeter() throws Exception {
+		return activatedMeter(false);
+	}
+
+	private static MeterDsmrImpl activatedMeter(boolean invert) throws Exception {
 		var sut = new MeterDsmrImpl();
 		new ComponentTest(sut) //
 				.activate(MyConfig.create() //
@@ -33,6 +37,7 @@ public class MeterDsmrImplTest {
 						.setEnabled(false) // do not open a real serial port
 						.setType(MeterType.GRID) //
 						.setPort("/dev/null") //
+						.setInvert(invert) //
 						.build());
 		return sut;
 	}
@@ -55,6 +60,24 @@ public class MeterDsmrImplTest {
 		assertEquals(358023L, (long) sut.getActiveProductionEnergyChannel().getNextValue().get());
 		// Export 2.8.x -> ConsumptionEnergy = (12.3 + 45.6) kWh -> 57900 Wh
 		assertEquals(57900L, (long) sut.getActiveConsumptionEnergyChannel().getNextValue().get());
+	}
+
+	@Test
+	public void invertNegatesPowersAndSwapsEnergies() throws Exception {
+		var sut = activatedMeter(true);
+
+		sut.applyTelegram(TelegramTest.withValidCrc(TELEGRAM_BODY));
+
+		// Powers are negated
+		assertEquals(-1193, (int) sut.getActivePowerChannel().getNextValue().get());
+		assertEquals(-1193, (int) sut.getActivePowerL1Channel().getNextValue().get());
+		// Voltage and current are unaffected
+		assertEquals(230100, (int) sut.getVoltageL1Channel().getNextValue().get());
+		assertEquals(5000, (int) sut.getCurrentL1Channel().getNextValue().get());
+		// Energy mapping is swapped: export 2.8.x -> ProductionEnergy
+		assertEquals(57900L, (long) sut.getActiveProductionEnergyChannel().getNextValue().get());
+		// Import 1.8.x -> ConsumptionEnergy
+		assertEquals(358023L, (long) sut.getActiveConsumptionEnergyChannel().getNextValue().get());
 	}
 
 	@Test
