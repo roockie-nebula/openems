@@ -38,7 +38,9 @@ public class TelegramReader {
 		var started = false;
 		String line;
 		while ((line = this.reader.readLine()) != null) {
-			if (line.startsWith("/")) {
+			var start = findStartMarkerWithOnlyNoisePrefix(line);
+			if (start >= 0) {
+				line = line.substring(start);
 				sb.setLength(0);
 				started = true;
 			}
@@ -55,5 +57,22 @@ public class TelegramReader {
 			}
 		}
 		throw new EOFException("Stream closed before telegram completed");
+	}
+
+	private static int findStartMarkerWithOnlyNoisePrefix(String line) {
+		// Some P1 adapters prepend a NUL byte before telegrams. Accept the '/' start
+		// marker with only whitespace/control characters before it, but do not skip
+		// printable garbage as that could hide actual framing corruption.
+		var markerIndex = line.indexOf('/');
+		if (markerIndex < 0) {
+			return -1;
+		}
+		for (var i = 0; i < markerIndex; i++) {
+			var c = line.charAt(i);
+			if (!Character.isISOControl(c) && !Character.isWhitespace(c)) {
+				return -1;
+			}
+		}
+		return markerIndex;
 	}
 }

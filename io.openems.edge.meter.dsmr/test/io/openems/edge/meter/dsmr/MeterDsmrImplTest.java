@@ -83,4 +83,15 @@ public class MeterDsmrImplTest {
 		sut.applyTelegram(good, 17_000L);
 		assertFalse(sut.getCrcErrorChannel().getNextValue().get());
 	}
+
+	@Test
+	public void debugLogShowsActivePowerOnly() throws Exception {
+		var sut = activatedMeter();
+
+		sut.applyTelegram(TelegramTest.withValidCrc(TELEGRAM_BODY), 1_000L);
+
+		var debugLog = sut.debugLog();
+		assertTrue(debugLog.contains("L:"));
+		assertFalse(debugLog.contains("T:"));
+	}
 }

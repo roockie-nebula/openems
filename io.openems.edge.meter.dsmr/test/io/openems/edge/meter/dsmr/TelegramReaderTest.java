@@ -14,7 +14,7 @@ public class TelegramReaderTest {
 	@Test
 	public void readsTwoTelegramsThenEof() throws Exception {
 		var one = "/AAA\r\n\r\n1-0:1.7.0(01.000*kW)\r\n!1234\r\n";
-		var two = "/BBB\r\n\r\n1-0:1.7.0(02.000*kW)\r\n!5678\r\n";
+		var two = "\0/BBB\r\n\r\n1-0:1.7.0(02.000*kW)\r\n!5678\r\n";
 		var noise = "garbage-before\r\n"; // must be ignored until '/'
 		var in = new ByteArrayInputStream((noise + one + two).getBytes(US_ASCII));
 		var reader = new TelegramReader(in);
