@@ -1,0 +1,72 @@
+= Meter Generic Modbus
+
+Reads an active power and a cumulative active energy value from an arbitrary
+register pair on an arbitrary Modbus device, and exposes them as a standard
+`ElectricityMeter`.
+
+There is no device-specific code in this bundle. Function code, register
+address, encoding, word order and scale factor are all component configuration,
+so supporting a new installation is a configuration change rather than a
+firmware release. This matters for bespoke energy management systems, where the
+register map differs per site even when the hardware and the vendor do not.
+
+== Configuration
+
+Each instance reads one meter. Add one instance per meter; several instances
+may share a Modbus bridge and a unit-id.
+
+Power and energy are configured independently:
+
+* `powerFunctionCode` / `energyFunctionCode` -- `FC3` reads Holding Registers,
+  `FC4` reads Input Registers.
+* `powerEncoding` / `energyEncoding` -- `INT16`, `UINT16`, `INT32`, `UINT32` or
+  `FLOAT32`.
+* `powerWordOrder` / `energyWordOrder` -- which 16-bit word comes first in a
+  32-bit value. `MSWLSW` is the Modbus default. Word order is a property of the
+  value, not of the device, so the two may differ within one meter.
+* `powerScaleFactor` / `energyScaleFactor` -- decimal exponent applied to reach
+  the channel unit: `channel = register * 10^n`. Power targets Watt, so a
+  register in W uses `0` and in kW uses `3`. Energy targets Watt-hours, so a
+  register in Wh uses `0`, in 1/10 kWh uses `2` and in kWh uses `3`.
+* `invertPower` -- negates the active power to correct a reversed measurement
+  convention. It does not affect energy: a single cumulative counter cannot be
+  split into import and export, so energy always maps to
+  `ActiveConsumptionEnergy`.
+
+`energySource` selects where the energy value comes from:
+
+[cols="1,4"]
+|===
+| `REGISTER` | Read a cumulative energy register. The default.
+| `FROM_POWER` | Integrate the active power over time, for devices that expose no energy register. Negative power is clamped to zero so the counter stays monotonic.
+| `NONE` | Power only; the energy channel stays undefined.
+|===
+
+The three are mutually exclusive by construction. Reading an energy register
+and integrating power into the same channel would double-count.
+
+== Modbus traffic
+
+Power and energy are read by a single Modbus transaction when they share a
+function code and fit within 8 registers, which is the usual case. Otherwise
+they are read by two.
+
+At the default `priority` of `LOW`, the bridge executes one low-priority read
+per cycle across all components, so bus load does not grow with the number of
+configured meters; refresh latency does. Twelve meters on a 1 s cycle refresh
+every ~12 s, which is ample for energy monitoring and matters where the
+Modbus/TCP endpoint fronts a serial segment. Raise individual meters to `HIGH`
+where finer resolution is needed; each one adds a transaction per cycle.
+
+== Thermal meters
+
+Heat meters (Wärmezähler) report W and Wh like everything else and are read the
+same way. OpenEMS has no heat-meter nature, so they are indistinguishable from
+electricity meters at the channel level -- use the `alias` to identify them, or
+they will be counted as electricity consumption downstream.
+
+Implemented Natures:
+
+- ElectricityMeter
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.meter.modbus[Source Code icon:github[]]

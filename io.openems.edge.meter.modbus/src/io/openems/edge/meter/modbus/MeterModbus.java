@@ -1,11 +1,11 @@
-package io.openems.edge.meter.scheco;
+package io.openems.edge.meter.modbus;
 
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.meter.api.ElectricityMeter;
 
-public interface MeterScheco extends ElectricityMeter, ModbusComponent, OpenemsComponent {
+public interface MeterModbus extends ElectricityMeter, ModbusComponent, OpenemsComponent {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		// no bundle-specific channels; everything maps onto ElectricityMeter
