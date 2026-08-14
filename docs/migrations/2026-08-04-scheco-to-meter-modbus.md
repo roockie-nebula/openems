@@ -20,16 +20,16 @@ address 10. Vendor register list: [`docs/vendor/scheco.pdf`](../vendor/scheco.pd
 |---|---|
 | `modbusUnitId` | `10` |
 | `priority` | `LOW` |
-| `powerFunctionCode` | `FC3` |
+| `powerRegisterType` | `HOLDING_REGISTERS` |
 | `powerEncoding` | `INT32` |
-| `powerWordOrder` | `MSWLSW` |
-| `powerScaleFactor` | `0` (registers are in W) |
-| `invertPower` | `false` |
-| `energySource` | `REGISTER` |
-| `energyFunctionCode` | `FC3` |
+| `powerWordOrder` | `HIGH_WORD_FIRST` |
+| `powerScaleFactor` | `ONE` (registers are in W) |
+| `powerInvert` | `false` |
+| `energySource` | `READ_FROM_REGISTER` |
+| `energyRegisterType` | `HOLDING_REGISTERS` |
 | `energyEncoding` | `INT32` |
-| `energyWordOrder` | `MSWLSW` |
-| `energyScaleFactor` | `2` (registers are in 1/10 kWh) |
+| `energyWordOrder` | `HIGH_WORD_FIRST` |
+| `energyScaleFactor` | `HUNDRED` (registers are in 1/10 kWh) |
 
 Each meter occupies four contiguous holding registers — energy first, then
 power — so each costs exactly one Modbus transaction.

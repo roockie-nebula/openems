@@ -1,10 +1,10 @@
-= Meter Generic Modbus
+= Generic Modbus Meter
 
 Reads an active power and a cumulative active energy value from an arbitrary
 register pair on an arbitrary Modbus device, and exposes them as a standard
 `ElectricityMeter`.
 
-There is no device-specific code in this bundle. Function code, register
+There is no device-specific code in this bundle. Register type, register
 address, encoding, word order and scale factor are all component configuration,
 so supporting a new installation is a configuration change rather than a
 firmware release. This matters for bespoke energy management systems, where the
@@ -17,18 +17,24 @@ may share a Modbus bridge and a unit-id.
 
 Power and energy are configured independently:
 
-* `powerFunctionCode` / `energyFunctionCode` -- `FC3` reads Holding Registers,
-  `FC4` reads Input Registers.
+* `powerRegisterType` / `energyRegisterType` -- `HOLDING_REGISTERS` (Modbus
+  function code 3) or `INPUT_REGISTERS` (function code 4). Named after the
+  register kind because that is the word vendor documentation uses.
 * `powerEncoding` / `energyEncoding` -- `INT16`, `UINT16`, `INT32`, `UINT32` or
   `FLOAT32`.
-* `powerWordOrder` / `energyWordOrder` -- which 16-bit word comes first in a
-  32-bit value. `MSWLSW` is the Modbus default. Word order is a property of the
-  value, not of the device, so the two may differ within one meter.
-* `powerScaleFactor` / `energyScaleFactor` -- decimal exponent applied to reach
-  the channel unit: `channel = register * 10^n`. Power targets Watt, so a
-  register in W uses `0` and in kW uses `3`. Energy targets Watt-hours, so a
-  register in Wh uses `0`, in 1/10 kWh uses `2` and in kWh uses `3`.
-* `invertPower` -- negates the active power to correct a reversed measurement
+* `powerWordOrder` / `energyWordOrder` -- which half of a 32-bit value sits at
+  the configured address. `HIGH_WORD_FIRST` is the Modbus default; pick
+  `LOW_WORD_FIRST` where the documentation lists a `_low` register before its
+  `_high` counterpart. Word order is a property of the value, not of the device,
+  so the two may differ within one meter -- the WP Friedhofallee controller
+  really does mix them.
+* `powerScaleFactor` / `energyScaleFactor` -- what the register value is
+  multiplied by to reach the channel unit, chosen from `ONE_THOUSANDTH`,
+  `ONE_HUNDREDTH`, `ONE_TENTH`, `ONE`, `TEN`, `HUNDRED`, `THOUSAND`. Power
+  targets Watt, so a register in W uses `ONE` and in kW uses `THOUSAND`. Energy
+  targets Watt-hours, so a register in Wh uses `ONE`, in 1/10 kWh uses
+  `HUNDRED` and in kWh uses `THOUSAND`.
+* `powerInvert` -- negates the active power to correct a reversed measurement
   convention. It does not affect energy: a single cumulative counter cannot be
   split into import and export, so energy always maps to
   `ActiveConsumptionEnergy`.
@@ -37,9 +43,9 @@ Power and energy are configured independently:
 
 [cols="1,4"]
 |===
-| `REGISTER` | Read a cumulative energy register. The default.
-| `FROM_POWER` | Integrate the active power over time, for devices that expose no energy register. Negative power is clamped to zero so the counter stays monotonic.
-| `NONE` | Power only; the energy channel stays undefined.
+| `READ_FROM_REGISTER` | Read a cumulative energy register. The default.
+| `INTEGRATE_FROM_POWER` | Integrate the active power over time, for devices that expose no energy register. Negative power is clamped to zero so the counter stays monotonic.
+| `NOT_AVAILABLE` | Power only; the energy channel stays undefined.
 |===
 
 The three are mutually exclusive by construction. Reading an energy register
@@ -48,7 +54,7 @@ and integrating power into the same channel would double-count.
 == Modbus traffic
 
 Power and energy are read by a single Modbus transaction when they share a
-function code and fit within 8 registers, which is the usual case. Otherwise
+register type and fit within 8 registers, which is the usual case. Otherwise
 they are read by two.
 
 At the default `priority` of `LOW`, the bridge executes one low-priority read

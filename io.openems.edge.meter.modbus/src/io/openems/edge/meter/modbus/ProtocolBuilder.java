@@ -12,7 +12,6 @@ import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.ElementToChannelScaleFactorConverter;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.ModbusElement;
-import io.openems.edge.bridge.modbus.api.element.WordOrder;
 import io.openems.edge.bridge.modbus.api.task.Task;
 import io.openems.edge.common.channel.ChannelId;
 import io.openems.edge.common.taskmanager.Priority;
@@ -40,13 +39,13 @@ public final class ProtocolBuilder {
 	 * One value to read: a Modbus register range mapped onto an OpenEMS Channel.
 	 *
 	 * @param channelId the target Channel
-	 * @param fc        the Modbus read function code
+	 * @param registerType the kind of Modbus register to read from
 	 * @param address   the address of the first register
 	 * @param encoding  the {@link Encoding} of the value
 	 * @param wordOrder the {@link WordOrder}; ignored for 16-bit encodings
 	 * @param converter the {@link ElementToChannelConverter} to apply
 	 */
-	public record Point(ChannelId channelId, Fc fc, int address, Encoding encoding, WordOrder wordOrder,
+	public record Point(ChannelId channelId, RegisterType registerType, int address, Encoding encoding, WordOrder wordOrder,
 			ElementToChannelConverter converter) {
 
 		/**
@@ -98,19 +97,19 @@ public final class ProtocolBuilder {
 	 * invert flag.
 	 *
 	 * <p>
-	 * A scale factor of 0 skips the multiply entirely rather than multiplying by
+	 * {@link ScaleFactor#ONE} skips the multiply entirely rather than multiplying by
 	 * 1.0, which would turn an exact integer into a float round-trip.
 	 *
-	 * @param scaleFactor the decimal exponent; {@code channel = register * 10^n}
+	 * @param scaleFactor the {@link ScaleFactor} to apply
 	 * @param invert      whether to negate the value
 	 * @return the {@link ElementToChannelConverter}
 	 */
-	public static ElementToChannelConverter converter(int scaleFactor, boolean invert) {
-		if (scaleFactor == 0) {
+	public static ElementToChannelConverter converter(ScaleFactor scaleFactor, boolean invert) {
+		if (scaleFactor == ScaleFactor.ONE) {
 			// INVERT_IF_TRUE(false) is DIRECT_1_TO_1
 			return INVERT_IF_TRUE(invert);
 		}
-		return chain(new ElementToChannelScaleFactorConverter(scaleFactor), INVERT_IF_TRUE(invert));
+		return chain(new ElementToChannelScaleFactorConverter(scaleFactor.getExponent()), INVERT_IF_TRUE(invert));
 	}
 
 	/**
@@ -140,7 +139,7 @@ public final class ProtocolBuilder {
 			for (var j = i + 1; j < points.size(); j++) {
 				var a = points.get(i);
 				var b = points.get(j);
-				if (a.fc() == b.fc() && a.address() <= b.endAddress() && b.address() <= a.endAddress()) {
+				if (a.registerType() == b.registerType() && a.address() <= b.endAddress() && b.address() <= a.endAddress()) {
 					throw new OpenemsException("Modbus registers for Channels [" + a.channelId().id() + "] and ["
 							+ b.channelId().id() + "] overlap");
 				}
@@ -152,7 +151,7 @@ public final class ProtocolBuilder {
 	 * Builds the read {@link Task}s for the given {@link Point}s.
 	 *
 	 * <p>
-	 * Points sharing a function code are merged into one Task while they stay
+	 * Points sharing a register type are merged into one Task while they stay
 	 * within {@link #MAX_MERGE_SPAN} registers of the Task's first register.
 	 * Merging works from the actual addresses, never from an assumed layout: the
 	 * two values may appear in either order, and do, across the known devices.
@@ -167,21 +166,21 @@ public final class ProtocolBuilder {
 	 */
 	public static List<Task> build(List<Point> points, Priority priority, ElementMapper mapper) {
 		var tasks = new ArrayList<Task>();
-		for (var fc : Fc.values()) {
-			var ofThisFc = points.stream() //
-					.filter(p -> p.fc() == fc) //
+		for (var registerType : RegisterType.values()) {
+			var ofThisType = points.stream() //
+					.filter(p -> p.registerType() == registerType) //
 					.sorted(comparingInt(Point::address)) //
 					.toList();
 			var group = new ArrayList<Point>();
-			for (var point : ofThisFc) {
+			for (var point : ofThisType) {
 				if (!group.isEmpty() && point.endAddress() - group.get(0).address() + 1 > MAX_MERGE_SPAN) {
-					tasks.add(toTask(fc, group, priority, mapper));
+					tasks.add(toTask(registerType, group, priority, mapper));
 					group = new ArrayList<>();
 				}
 				group.add(point);
 			}
 			if (!group.isEmpty()) {
-				tasks.add(toTask(fc, group, priority, mapper));
+				tasks.add(toTask(registerType, group, priority, mapper));
 			}
 		}
 		return tasks;
@@ -195,13 +194,13 @@ public final class ProtocolBuilder {
 	 * mandatory, not an optimisation: {@code AbstractTask} rejects an element that
 	 * does not begin exactly where the previous one ended.
 	 *
-	 * @param fc       the Modbus read function code
+	 * @param registerType the kind of Modbus register to read from
 	 * @param group    the {@link Point}s, ascending by address
 	 * @param priority the {@link Priority}
 	 * @param mapper   registers each element with its Channel
 	 * @return the {@link Task}
 	 */
-	private static Task toTask(Fc fc, List<Point> group, Priority priority, ElementMapper mapper) {
+	private static Task toTask(RegisterType registerType, List<Point> group, Priority priority, ElementMapper mapper) {
 		var startAddress = group.get(0).address();
 		var elements = new ArrayList<ModbusElement>();
 		var nextAddress = startAddress;
@@ -214,6 +213,6 @@ public final class ProtocolBuilder {
 					point.converter()));
 			nextAddress = point.address() + point.length();
 		}
-		return fc.createTask(startAddress, priority, elements.toArray(ModbusElement[]::new));
+		return registerType.createTask(startAddress, priority, elements.toArray(ModbusElement[]::new));
 	}
 }

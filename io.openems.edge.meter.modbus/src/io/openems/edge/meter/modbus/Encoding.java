@@ -6,7 +6,6 @@ import io.openems.edge.bridge.modbus.api.element.SignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
-import io.openems.edge.bridge.modbus.api.element.WordOrder;
 
 /**
  * How a value is encoded in the Modbus registers.
@@ -53,9 +52,9 @@ public enum Encoding {
 		return switch (this) {
 		case INT16 -> new SignedWordElement(address);
 		case UINT16 -> new UnsignedWordElement(address);
-		case INT32 -> new SignedDoublewordElement(address).wordOrder(wordOrder);
-		case UINT32 -> new UnsignedDoublewordElement(address).wordOrder(wordOrder);
-		case FLOAT32 -> new FloatDoublewordElement(address).wordOrder(wordOrder);
+		case INT32 -> new SignedDoublewordElement(address).wordOrder(wordOrder.toBridge());
+		case UINT32 -> new UnsignedDoublewordElement(address).wordOrder(wordOrder.toBridge());
+		case FLOAT32 -> new FloatDoublewordElement(address).wordOrder(wordOrder.toBridge());
 		};
 	}
 }

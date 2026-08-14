@@ -12,10 +12,13 @@ import io.openems.edge.meter.api.ElectricityMeter;
  * double-count, so the choice is a single enum rather than an independent flag.
  */
 public enum EnergySource {
+
 	/** Read a cumulative energy register from the device. */
-	REGISTER,
+	READ_FROM_REGISTER,
+
 	/** Integrate the active power over time. For devices without an energy register. */
-	FROM_POWER,
+	INTEGRATE_FROM_POWER,
+
 	/** No energy value; the channel stays undefined. */
-	NONE;
+	NOT_AVAILABLE;
 }

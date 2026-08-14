@@ -1,12 +1,14 @@
 package io.openems.edge.meter.modbus;
 
 import static io.openems.common.types.MeterType.CONSUMPTION_METERED;
-import static io.openems.edge.bridge.modbus.api.element.WordOrder.LSWMSW;
 import static io.openems.edge.meter.api.ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY;
 import static io.openems.edge.meter.api.ElectricityMeter.ChannelId.ACTIVE_POWER;
 import static io.openems.edge.meter.modbus.Encoding.FLOAT32;
 import static io.openems.edge.meter.modbus.Encoding.INT32;
-import static io.openems.edge.meter.modbus.Fc.FC4;
+import static io.openems.edge.meter.modbus.RegisterType.INPUT_REGISTERS;
+import static io.openems.edge.meter.modbus.ScaleFactor.HUNDRED;
+import static io.openems.edge.meter.modbus.ScaleFactor.THOUSAND;
+import static io.openems.edge.meter.modbus.WordOrder.LOW_WORD_FIRST;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -50,12 +52,16 @@ public class MeterModbusImplTest {
 				.addReference("setModbus", new DummyModbusBridge("modbus0") //
 						// Holding registers 0-3: power 1000 W, then 999999 at the energy address
 						.withRegisters(0, 0x0000, 0x03E8, 0x000F, 0x423F) //
-						// Holding registers 24-27, Simaka WMZ, LSWMSW:
+						// Holding registers 24-27, Simaka WMZ, LOW_WORD_FIRST:
 						// power 98765 = 0x000181CD, energy 7654321 = 0x0074CBB1
 						.withRegisters(24, 0x81CD, 0x0001, 0xCBB1, 0x0074) //
+						// Holding registers 40-43, AE_WMZ_5, captured from the live
+						// controller at 192.168.22.121:503 on 14. August 2026:
+						// power 0 W, energy 70331 kWh = 0x000112BB
+						.withRegisters(40, 0x0000, 0x0000, 0x12BB, 0x0001) //
 						// Holding registers 100-103: FLOAT32 -1.5 and +1.5
 						.withRegisters(100, 0xBFC0, 0x0000, 0x3FC0, 0x0000) //
-						// Holding registers 9206-9209, Scheco, MSWLSW:
+						// Holding registers 9206-9209, Scheco, HIGH_WORD_FIRST:
 						// energy 1234567 = 0x0012D687, power 123456 = 0x0001E240
 						.withRegisters(9206, 0x0012, 0xD687, 0x0001, 0xE240) //
 						// Input registers 53-56, Simaka emeter, FLOAT32:
@@ -64,7 +70,8 @@ public class MeterModbusImplTest {
 	}
 
 	/**
-	 * The Scheco Wärmepumpe: FC3, INT32, MSWLSW, energy in 1/10 kWh.
+	 * The Scheco Wärmepumpe: holding registers, INT32, HIGH_WORD_FIRST, energy in
+	 * 1/10 kWh.
 	 *
 	 * @return a {@link MyConfig.Builder}
 	 */
@@ -76,7 +83,7 @@ public class MeterModbusImplTest {
 				.setType(CONSUMPTION_METERED) //
 				.setPowerAddress(9208) //
 				.setEnergyAddress(9206) //
-				.setEnergyScaleFactor(2);
+				.setEnergyScaleFactor(HUNDRED);
 	}
 
 	@Test
@@ -90,7 +97,7 @@ public class MeterModbusImplTest {
 
 	@Test
 	public void invertNegatesPowerButNotEnergy() throws Exception {
-		this.test.activate(scheco().setInvertPower(true).build()) //
+		this.test.activate(scheco().setPowerInvert(true).build()) //
 				.next(new TestCase() //
 						.output(ACTIVE_POWER, -123_456) //
 						.output(ACTIVE_CONSUMPTION_ENERGY, 123_456_700L));
@@ -113,9 +120,9 @@ public class MeterModbusImplTest {
 				.setId("meter0") //
 				.setModbusId("modbus0") //
 				.setPowerAddress(24) //
-				.setPowerWordOrder(LSWMSW) //
+				.setPowerWordOrder(LOW_WORD_FIRST) //
 				.setEnergyAddress(26) //
-				.setEnergyWordOrder(LSWMSW) //
+				.setEnergyWordOrder(LOW_WORD_FIRST) //
 				.build()) //
 				.next(new TestCase() //
 						.output(ACTIVE_POWER, 98_765) //
@@ -123,14 +130,37 @@ public class MeterModbusImplTest {
 	}
 
 	@Test
+	public void simakaWmzDecodesACapturedFieldReading() throws Exception {
+		// The same configuration we deploy for AE_WMZ_5, run against registers read off
+		// the real controller - so a decode regression shows up as a wrong kWh value,
+		// not just a wrong synthetic one. The unit id is ignored by that slave.
+		this.test.activate(MyConfig.create() //
+				.setId("meter0") //
+				.setModbusId("modbus0") //
+				.setModbusUnitId(1) //
+				.setType(CONSUMPTION_METERED) //
+				.setPowerAddress(40) //
+				.setPowerWordOrder(LOW_WORD_FIRST) //
+				.setEnergyAddress(42) //
+				.setEnergyWordOrder(LOW_WORD_FIRST) //
+				.setEnergyScaleFactor(THOUSAND) //
+				.build()) //
+				.next(new TestCase() //
+						.output(ACTIVE_POWER, 0) //
+						// 70331 kWh = 70_331_000 Wh
+						.output(ACTIVE_CONSUMPTION_ENERGY, 70_331_000L));
+	}
+
+	@Test
 	public void wrongWordOrderYieldsADifferentValue() throws Exception {
-		// Guards the test above: with MSWLSW the same registers decode to garbage, so
+		// Guards the test above: with HIGH_WORD_FIRST the same registers decode to
+		// garbage, so
 		// the assertion really does exercise word order.
 		this.test.activate(MyConfig.create() //
 				.setId("meter0") //
 				.setModbusId("modbus0") //
 				.setPowerAddress(24) //
-				.setEnergySource(EnergySource.NONE) //
+				.setEnergySource(EnergySource.NOT_AVAILABLE) //
 				.build()) //
 				.next(new TestCase() //
 						// 0x81CD0001 as a signed 32-bit integer
@@ -142,13 +172,13 @@ public class MeterModbusImplTest {
 		this.test.activate(MyConfig.create() //
 				.setId("meter0") //
 				.setModbusId("modbus0") //
-				.setPowerFunctionCode(FC4) //
+				.setPowerRegisterType(INPUT_REGISTERS) //
 				.setPowerAddress(55) //
 				.setPowerEncoding(FLOAT32) //
-				.setEnergyFunctionCode(FC4) //
+				.setEnergyRegisterType(INPUT_REGISTERS) //
 				.setEnergyAddress(53) //
 				.setEnergyEncoding(FLOAT32) //
-				.setEnergyScaleFactor(3) //
+				.setEnergyScaleFactor(THOUSAND) //
 				.build()) //
 				.next(new TestCase() //
 						.output(ACTIVE_POWER, 4321) //
@@ -167,8 +197,8 @@ public class MeterModbusImplTest {
 				.setModbusId("modbus0") //
 				.setPowerAddress(100) //
 				.setPowerEncoding(FLOAT32) //
-				.setPowerScaleFactor(3) //
-				.setEnergySource(EnergySource.NONE) //
+				.setPowerScaleFactor(THOUSAND) //
+				.setEnergySource(EnergySource.NOT_AVAILABLE) //
 				.build()) //
 				.next(new TestCase() //
 						// -1.5 kW = -1500 W
@@ -182,15 +212,15 @@ public class MeterModbusImplTest {
 				.setModbusId("modbus0") //
 				.setPowerAddress(102) //
 				.setPowerEncoding(FLOAT32) //
-				.setPowerScaleFactor(3) //
-				.setEnergySource(EnergySource.NONE) //
+				.setPowerScaleFactor(THOUSAND) //
+				.setEnergySource(EnergySource.NOT_AVAILABLE) //
 				.build()) //
 				.next(new TestCase() //
 						.output(ACTIVE_POWER, 1500));
 	}
 
 	@Test
-	public void energySourceNoneReadsNoEnergyRegister() throws Exception {
+	public void energySourceNotAvailableReadsNoEnergyRegister() throws Exception {
 		// The energy address points at a populated register; a null Channel proves no
 		// energy element was built.
 		this.test.activate(MyConfig.create() //
@@ -198,7 +228,7 @@ public class MeterModbusImplTest {
 				.setModbusId("modbus0") //
 				.setPowerAddress(0) //
 				.setEnergyAddress(2) //
-				.setEnergySource(EnergySource.NONE) //
+				.setEnergySource(EnergySource.NOT_AVAILABLE) //
 				.build()) //
 				.next(new TestCase() //
 						.output(ACTIVE_POWER, 1000) //
@@ -206,14 +236,14 @@ public class MeterModbusImplTest {
 	}
 
 	@Test
-	public void energySourceFromPowerIntegratesInsteadOfReading() throws Exception {
+	public void energySourceIntegrateFromPowerDoesNotReadTheRegister() throws Exception {
 		// Same layout as above: 999999 sits at the energy address and must not appear.
 		this.test.activate(MyConfig.create() //
 				.setId("meter0") //
 				.setModbusId("modbus0") //
 				.setPowerAddress(0) //
 				.setEnergyAddress(2) //
-				.setEnergySource(EnergySource.FROM_POWER) //
+				.setEnergySource(EnergySource.INTEGRATE_FROM_POWER) //
 				.build()) //
 				// First cycle initialises the counter from Timedata; nothing to integrate yet
 				.next(new TestCase() //
@@ -233,7 +263,7 @@ public class MeterModbusImplTest {
 				.setModbusId("modbus0") //
 				.setPowerAddress(0) //
 				.setEnergyAddress(24) //
-				.setEnergyWordOrder(LSWMSW) //
+				.setEnergyWordOrder(LOW_WORD_FIRST) //
 				.build()) //
 				.next(new TestCase() //
 						.output(ACTIVE_POWER, 1000) //

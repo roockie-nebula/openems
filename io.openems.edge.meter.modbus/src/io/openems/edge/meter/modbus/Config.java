@@ -4,11 +4,10 @@ import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
 import io.openems.common.types.MeterType;
-import io.openems.edge.bridge.modbus.api.element.WordOrder;
 import io.openems.edge.common.taskmanager.Priority;
 
 @ObjectClassDefinition(//
-		name = "Meter Generic Modbus", //
+		name = "Generic Modbus Meter", //
 		description = "Reads an active power and a cumulative active energy value from any Modbus device.")
 @interface Config {
 
@@ -27,14 +26,14 @@ import io.openems.edge.common.taskmanager.Priority;
 	@AttributeDefinition(name = "Modbus-ID", description = "Id of the modbus bridge")
 	String modbus_id() default "modbus0";
 
-	@AttributeDefinition(name = "Modbus Unit-ID", description = "The Unit-ID of the Modbus device")
+	@AttributeDefinition(name = "Modbus Unit-ID", description = "The Unit-ID of the Modbus device. Some devices ignore it and answer on any Unit-ID.")
 	int modbusUnitId() default 1;
 
 	@AttributeDefinition(name = "Priority", description = "HIGH reads this meter on every cycle. LOW shares one read per cycle with every other LOW task on the bridge, which is enough for energy monitoring and keeps the bus quiet.")
 	Priority priority() default Priority.LOW;
 
-	@AttributeDefinition(name = "Power: function code", description = "FC3 reads Holding Registers, FC4 reads Input Registers")
-	Fc powerFunctionCode() default Fc.FC3;
+	@AttributeDefinition(name = "Power: register type", description = "The kind of register the active power is read from, as named in the vendor documentation")
+	RegisterType powerRegisterType() default RegisterType.HOLDING_REGISTERS;
 
 	@AttributeDefinition(name = "Power: register address", description = "Address of the first register of the active power value (0-65535)")
 	int powerAddress() default 0;
@@ -42,36 +41,36 @@ import io.openems.edge.common.taskmanager.Priority;
 	@AttributeDefinition(name = "Power: encoding", description = "How the active power value is encoded")
 	Encoding powerEncoding() default Encoding.INT32;
 
-	@AttributeDefinition(name = "Power: word order", description = "Which 16-bit word comes first. Only used for 32-bit encodings. MSWLSW is the Modbus default.")
-	WordOrder powerWordOrder() default WordOrder.MSWLSW;
+	@AttributeDefinition(name = "Power: word order", description = "Which half of a 32-bit value sits at the register address above. Only used for 32-bit encodings. HIGH_WORD_FIRST is the Modbus default; pick LOW_WORD_FIRST when the documentation lists a '_low' register before its '_high' counterpart.")
+	WordOrder powerWordOrder() default WordOrder.HIGH_WORD_FIRST;
 
-	@AttributeDefinition(name = "Power: scale factor", description = "Decimal exponent applied to reach Watt: channel = register * 10^n. Registers in W use 0, in kW use 3.")
-	int powerScaleFactor() default 0;
+	@AttributeDefinition(name = "Power: scale factor", description = "What the register value is multiplied by to reach Watt. A register in W uses ONE, in kW uses THOUSAND.")
+	ScaleFactor powerScaleFactor() default ScaleFactor.ONE;
 
 	@AttributeDefinition(name = "Power: invert", description = "Negates the active power. Corrects a reversed measurement convention; does not affect energy.")
-	boolean invertPower() default false;
+	boolean powerInvert() default false;
 
-	@AttributeDefinition(name = "Energy: source", description = "REGISTER reads a cumulative energy register. FROM_POWER integrates the active power, for devices without one. NONE leaves the energy channel undefined.")
-	EnergySource energySource() default EnergySource.REGISTER;
+	@AttributeDefinition(name = "Energy: source", description = "READ_FROM_REGISTER reads a cumulative energy register. INTEGRATE_FROM_POWER integrates the active power, for devices without one. NOT_AVAILABLE leaves the energy channel undefined.")
+	EnergySource energySource() default EnergySource.READ_FROM_REGISTER;
 
-	@AttributeDefinition(name = "Energy: function code", description = "Only used when Energy source is REGISTER")
-	Fc energyFunctionCode() default Fc.FC3;
+	@AttributeDefinition(name = "Energy: register type", description = "Only used when Energy source is READ_FROM_REGISTER")
+	RegisterType energyRegisterType() default RegisterType.HOLDING_REGISTERS;
 
-	@AttributeDefinition(name = "Energy: register address", description = "Address of the first register of the cumulative energy value (0-65535). Only used when Energy source is REGISTER.")
+	@AttributeDefinition(name = "Energy: register address", description = "Address of the first register of the cumulative energy value (0-65535). Only used when Energy source is READ_FROM_REGISTER.")
 	int energyAddress() default 0;
 
-	@AttributeDefinition(name = "Energy: encoding", description = "Only used when Energy source is REGISTER")
+	@AttributeDefinition(name = "Energy: encoding", description = "Only used when Energy source is READ_FROM_REGISTER")
 	Encoding energyEncoding() default Encoding.INT32;
 
-	@AttributeDefinition(name = "Energy: word order", description = "Only used when Energy source is REGISTER")
-	WordOrder energyWordOrder() default WordOrder.MSWLSW;
+	@AttributeDefinition(name = "Energy: word order", description = "Which half of a 32-bit value sits at the register address above. May differ from the power word order; the WP Friedhofallee controller mixes both.")
+	WordOrder energyWordOrder() default WordOrder.HIGH_WORD_FIRST;
 
-	@AttributeDefinition(name = "Energy: scale factor", description = "Decimal exponent applied to reach Watt-hours: channel = register * 10^n. Registers in Wh use 0, in 1/10 kWh use 2, in kWh use 3.")
-	int energyScaleFactor() default 0;
+	@AttributeDefinition(name = "Energy: scale factor", description = "What the register value is multiplied by to reach Watt-hours. A register in Wh uses ONE, in 1/10 kWh uses HUNDRED, in kWh uses THOUSAND.")
+	ScaleFactor energyScaleFactor() default ScaleFactor.ONE;
 
 	@AttributeDefinition(name = "Modbus target filter", description = "This is auto-generated by 'Modbus-ID'")
 	String Modbus_target() default "(enabled=true)";
 
-	String webconsole_configurationFactory_nameHint() default "Meter Generic Modbus [{id}]";
+	String webconsole_configurationFactory_nameHint() default "Generic Modbus Meter [{id}]";
 
 }

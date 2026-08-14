@@ -3,7 +3,6 @@ package io.openems.edge.meter.modbus;
 import io.openems.common.test.AbstractComponentConfig;
 import io.openems.common.types.MeterType;
 import io.openems.common.utils.ConfigUtils;
-import io.openems.edge.bridge.modbus.api.element.WordOrder;
 import io.openems.edge.common.taskmanager.Priority;
 
 @SuppressWarnings("all")
@@ -16,18 +15,18 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int modbusUnitId = 1;
 		private MeterType type = MeterType.CONSUMPTION_METERED;
 		private Priority priority = Priority.HIGH;
-		private Fc powerFunctionCode = Fc.FC3;
+		private RegisterType powerRegisterType = RegisterType.HOLDING_REGISTERS;
 		private int powerAddress = 0;
 		private Encoding powerEncoding = Encoding.INT32;
-		private WordOrder powerWordOrder = WordOrder.MSWLSW;
-		private int powerScaleFactor = 0;
-		private boolean invertPower = false;
-		private EnergySource energySource = EnergySource.REGISTER;
-		private Fc energyFunctionCode = Fc.FC3;
+		private WordOrder powerWordOrder = WordOrder.HIGH_WORD_FIRST;
+		private ScaleFactor powerScaleFactor = ScaleFactor.ONE;
+		private boolean powerInvert = false;
+		private EnergySource energySource = EnergySource.READ_FROM_REGISTER;
+		private RegisterType energyRegisterType = RegisterType.HOLDING_REGISTERS;
 		private int energyAddress = 0;
 		private Encoding energyEncoding = Encoding.INT32;
-		private WordOrder energyWordOrder = WordOrder.MSWLSW;
-		private int energyScaleFactor = 0;
+		private WordOrder energyWordOrder = WordOrder.HIGH_WORD_FIRST;
+		private ScaleFactor energyScaleFactor = ScaleFactor.ONE;
 
 		private Builder() {
 		}
@@ -62,8 +61,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setPowerFunctionCode(Fc powerFunctionCode) {
-			this.powerFunctionCode = powerFunctionCode;
+		public Builder setPowerRegisterType(RegisterType powerRegisterType) {
+			this.powerRegisterType = powerRegisterType;
 			return this;
 		}
 
@@ -82,13 +81,13 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setPowerScaleFactor(int powerScaleFactor) {
+		public Builder setPowerScaleFactor(ScaleFactor powerScaleFactor) {
 			this.powerScaleFactor = powerScaleFactor;
 			return this;
 		}
 
-		public Builder setInvertPower(boolean invertPower) {
-			this.invertPower = invertPower;
+		public Builder setPowerInvert(boolean powerInvert) {
+			this.powerInvert = powerInvert;
 			return this;
 		}
 
@@ -97,8 +96,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setEnergyFunctionCode(Fc energyFunctionCode) {
-			this.energyFunctionCode = energyFunctionCode;
+		public Builder setEnergyRegisterType(RegisterType energyRegisterType) {
+			this.energyRegisterType = energyRegisterType;
 			return this;
 		}
 
@@ -117,7 +116,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setEnergyScaleFactor(int energyScaleFactor) {
+		public Builder setEnergyScaleFactor(ScaleFactor energyScaleFactor) {
 			this.energyScaleFactor = energyScaleFactor;
 			return this;
 		}
@@ -174,8 +173,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public Fc powerFunctionCode() {
-		return this.builder.powerFunctionCode;
+	public RegisterType powerRegisterType() {
+		return this.builder.powerRegisterType;
 	}
 
 	@Override
@@ -194,13 +193,13 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public int powerScaleFactor() {
+	public ScaleFactor powerScaleFactor() {
 		return this.builder.powerScaleFactor;
 	}
 
 	@Override
-	public boolean invertPower() {
-		return this.builder.invertPower;
+	public boolean powerInvert() {
+		return this.builder.powerInvert;
 	}
 
 	@Override
@@ -209,8 +208,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public Fc energyFunctionCode() {
-		return this.builder.energyFunctionCode;
+	public RegisterType energyRegisterType() {
+		return this.builder.energyRegisterType;
 	}
 
 	@Override
@@ -229,7 +228,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public int energyScaleFactor() {
+	public ScaleFactor energyScaleFactor() {
 		return this.builder.energyScaleFactor;
 	}
 

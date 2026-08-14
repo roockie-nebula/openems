@@ -40,7 +40,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
  * Modbus register pair on an arbitrary Modbus device.
  *
  * <p>
- * Every device-specific detail - function code, address, encoding, word order,
+ * Every device-specific detail - register type, address, encoding, word order,
  * scale factor - is configuration, so a new installation is a configuration
  * change rather than a firmware release.
  */
@@ -67,7 +67,7 @@ public class MeterModbusImpl extends AbstractOpenemsModbusComponent implements M
 
 	private Config config;
 
-	/** Non-null only while {@code energySource} is FROM_POWER. */
+	/** Non-null only while {@code energySource} is INTEGRATE_FROM_POWER. */
 	private CalculateEnergyFromPower calculateConsumptionEnergy;
 
 	@Override
@@ -92,9 +92,9 @@ public class MeterModbusImpl extends AbstractOpenemsModbusComponent implements M
 		// only runs once the Modbus bridge binds.
 		ProtocolBuilder.validate(toPoints(config));
 		this.calculateConsumptionEnergy = switch (config.energySource()) {
-		case FROM_POWER -> new CalculateEnergyFromPower(this, //
+		case INTEGRATE_FROM_POWER -> new CalculateEnergyFromPower(this, //
 				ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, this.componentManager.getClock());
-		case REGISTER, NONE -> null;
+		case READ_FROM_REGISTER, NOT_AVAILABLE -> null;
 		};
 		// super.activate(...) returns true while the Modbus bridge reference is not yet
 		// bound; the protocol is (re)built once it becomes available, so stop early here.
@@ -135,11 +135,11 @@ public class MeterModbusImpl extends AbstractOpenemsModbusComponent implements M
 	private static List<Point> toPoints(Config config) {
 		var points = new ArrayList<Point>();
 		points.add(new Point(ElectricityMeter.ChannelId.ACTIVE_POWER, //
-				config.powerFunctionCode(), config.powerAddress(), config.powerEncoding(), config.powerWordOrder(),
-				ProtocolBuilder.converter(config.powerScaleFactor(), config.invertPower())));
-		if (config.energySource() == EnergySource.REGISTER) {
+				config.powerRegisterType(), config.powerAddress(), config.powerEncoding(), config.powerWordOrder(),
+				ProtocolBuilder.converter(config.powerScaleFactor(), config.powerInvert())));
+		if (config.energySource() == EnergySource.READ_FROM_REGISTER) {
 			points.add(new Point(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, //
-					config.energyFunctionCode(), config.energyAddress(), config.energyEncoding(),
+					config.energyRegisterType(), config.energyAddress(), config.energyEncoding(),
 					config.energyWordOrder(), ProtocolBuilder.converter(config.energyScaleFactor(), false)));
 		}
 		return points;
