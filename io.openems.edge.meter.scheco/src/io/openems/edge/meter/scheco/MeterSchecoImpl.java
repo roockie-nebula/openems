@@ -92,7 +92,7 @@ public class MeterSchecoImpl extends AbstractOpenemsModbusComponent
 		var powerAddress = energyAddress + 2;
 		return new ModbusProtocol(this, //
 				new FC3ReadRegistersTask(energyAddress, Priority.HIGH, //
-						m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY,
+						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY,
 								new SignedDoublewordElement(energyAddress), SCALE_FACTOR_2), //
 						m(ElectricityMeter.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(powerAddress),
 								INVERT_IF_TRUE(this.config.invert()))));

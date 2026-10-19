@@ -64,5 +64,5 @@ A former `CUSTOM` instance maps directly: `customEnergyAddress` →
 ## Note on the Wärmezähler
 
 The last five are thermal meters. They map onto `ActivePower` and
-`ActiveConsumptionEnergy` like everything else, so the German `alias` is the
+`ActiveProductionEnergy` like everything else, so the German `alias` is the
 only thing distinguishing thermal from electrical kWh downstream. Keep it.

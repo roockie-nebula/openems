@@ -26,11 +26,18 @@ link:../docs/vendor/scheco.pdf[`docs/vendor/scheco.pdf`].
 
 This bundle is consumption-oriented (default `MeterType.CONSUMPTION_METERED`,
 where positive power means consumption). The gateway exposes a single cumulative
-counter per sub-meter, so energy is always mapped to `ACTIVE_CONSUMPTION_ENERGY`
-(scaled to Wh) and power to `ACTIVE_POWER`. The `invert` option negates only the
-power sign (e.g. to correct a reversed measurement convention); it does not move
-energy to the production channel, as a single counter cannot be split into
+counter per sub-meter, which grows while the power is positive. Following the
+OpenEMS `ElectricityMeter` convention, it is mapped to `ACTIVE_PRODUCTION_ENERGY`
+(scaled to Wh) for every meter type, and power to `ACTIVE_POWER`. For a
+consumption meter, `ACTIVE_PRODUCTION_ENERGY` therefore holds the consumed
+energy. `ACTIVE_CONSUMPTION_ENERGY` stays undefined. The `invert` option negates
+only the power sign (e.g. to correct a reversed measurement convention); it does
+not move energy between channels, as a single counter cannot be split into
 import/export.
+
+Upgrading: energy moved from `ACTIVE_CONSUMPTION_ENERGY` to
+`ACTIVE_PRODUCTION_ENERGY`; ship this bundle together with the matching ROOCKiE
+gateway release.
 
 The 5 `HEAT_*` sub-meters are thermal (Wärmezähler); as OpenEMS has no
 heat-meter nature they map onto the same generic W/Wh channels.

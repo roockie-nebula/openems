@@ -36,8 +36,8 @@ import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 
 /**
- * Reads an active power and a cumulative active energy value from an arbitrary
- * Modbus register pair on an arbitrary Modbus device.
+ * Reads an active power and cumulative active energy values from arbitrary
+ * Modbus registers on an arbitrary Modbus device.
  *
  * <p>
  * Every device-specific detail - register type, address, encoding, word order,
@@ -68,6 +68,9 @@ public class MeterModbusImpl extends AbstractOpenemsModbusComponent implements M
 	private Config config;
 
 	/** Non-null only while {@code energySource} is INTEGRATE_FROM_POWER. */
+	private CalculateEnergyFromPower calculateProductionEnergy;
+
+	/** Non-null only while {@code energySource} is INTEGRATE_FROM_POWER. */
 	private CalculateEnergyFromPower calculateConsumptionEnergy;
 
 	@Override
@@ -90,12 +93,22 @@ public class MeterModbusImpl extends AbstractOpenemsModbusComponent implements M
 		this.config = config;
 		// Validate here rather than in defineModbusProtocol(), which cannot throw and
 		// only runs once the Modbus bridge binds.
+		if (config.powerSource() == PowerSource.NOT_AVAILABLE
+				&& config.energySource() != EnergySource.READ_FROM_REGISTER) {
+			throw new OpenemsException("Power source [NOT_AVAILABLE] requires Energy source [READ_FROM_REGISTER], got ["
+					+ config.energySource() + "]");
+		}
 		ProtocolBuilder.validate(toPoints(config));
-		this.calculateConsumptionEnergy = switch (config.energySource()) {
-		case INTEGRATE_FROM_POWER -> new CalculateEnergyFromPower(this, //
-				ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, this.componentManager.getClock());
-		case READ_FROM_REGISTER, NOT_AVAILABLE -> null;
-		};
+		if (config.energySource() == EnergySource.INTEGRATE_FROM_POWER) {
+			var clock = this.componentManager.getClock();
+			this.calculateProductionEnergy = new CalculateEnergyFromPower(this,
+					ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, clock);
+			this.calculateConsumptionEnergy = new CalculateEnergyFromPower(this,
+					ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, clock);
+		} else {
+			this.calculateProductionEnergy = null;
+			this.calculateConsumptionEnergy = null;
+		}
 		// super.activate(...) returns true while the Modbus bridge reference is not yet
 		// bound; the protocol is (re)built once it becomes available, so stop early here.
 		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
@@ -125,45 +138,59 @@ public class MeterModbusImpl extends AbstractOpenemsModbusComponent implements M
 	 * Translates the configuration into the values to read.
 	 *
 	 * <p>
-	 * Energy is always mapped to the consumption channel and never inverted: every
-	 * device in scope exposes a single monotonic counter, which cannot be split into
-	 * import and export.
+	 * Energy follows the OpenEMS {@link ElectricityMeter} convention for every
+	 * {@link MeterType}: the counter that grows while the active power is positive
+	 * maps to {@link ElectricityMeter.ChannelId#ACTIVE_PRODUCTION_ENERGY}, the one
+	 * that grows while it is negative to
+	 * {@link ElectricityMeter.ChannelId#ACTIVE_CONSUMPTION_ENERGY}. For a grid meter
+	 * that is buy-from-grid and sell-to-grid respectively.
 	 *
 	 * @param config the {@link Config}
 	 * @return the {@link Point}s
 	 */
 	private static List<Point> toPoints(Config config) {
 		var points = new ArrayList<Point>();
-		points.add(new Point(ElectricityMeter.ChannelId.ACTIVE_POWER, //
-				config.powerRegisterType(), config.powerAddress(), config.powerEncoding(), config.powerWordOrder(),
-				ProtocolBuilder.converter(config.powerScaleFactor(), config.powerInvert())));
+		if (config.powerSource() == PowerSource.READ_FROM_REGISTER) {
+			points.add(new Point(ElectricityMeter.ChannelId.ACTIVE_POWER, //
+					config.powerRegisterType(), config.powerAddress(), config.powerEncoding(), config.powerWordOrder(),
+					ProtocolBuilder.converter(config.powerScaleFactor(), config.powerInvert())));
+		}
 		if (config.energySource() == EnergySource.READ_FROM_REGISTER) {
-			points.add(new Point(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, //
+			points.add(new Point(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, //
 					config.energyRegisterType(), config.energyAddress(), config.energyEncoding(),
 					config.energyWordOrder(), ProtocolBuilder.converter(config.energyScaleFactor(), false)));
+			if (config.reverseEnergyEnabled()) {
+				points.add(new Point(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, //
+						config.reverseEnergyRegisterType(), config.reverseEnergyAddress(),
+						config.reverseEnergyEncoding(), config.reverseEnergyWordOrder(),
+						ProtocolBuilder.converter(config.reverseEnergyScaleFactor(), false)));
+			}
 		}
 		return points;
 	}
 
 	/**
-	 * Integrates the active power into the cumulative consumption energy.
-	 *
-	 * <p>
-	 * Negative power is clamped to zero: the target Channel is a cumulative
-	 * consumption counter and must not run backwards.
+	 * Integrates the active power into the cumulative energy channels: positive
+	 * power into the production energy, negative power into the consumption
+	 * energy, so neither counter runs backwards.
 	 */
 	private void calculateEnergy() {
 		var activePower = this.getActivePower().get();
 		if (activePower == null) {
+			this.calculateProductionEnergy.update(null);
 			this.calculateConsumptionEnergy.update(null);
+		} else if (activePower >= 0) {
+			this.calculateProductionEnergy.update(activePower);
+			this.calculateConsumptionEnergy.update(0);
 		} else {
-			this.calculateConsumptionEnergy.update(Math.max(0, activePower));
+			this.calculateProductionEnergy.update(0);
+			this.calculateConsumptionEnergy.update(-activePower);
 		}
 	}
 
 	@Override
 	public void handleEvent(Event event) {
-		if (!this.isEnabled() || this.calculateConsumptionEnergy == null) {
+		if (!this.isEnabled() || this.calculateProductionEnergy == null) {
 			return;
 		}
 		switch (event.getTopic()) {

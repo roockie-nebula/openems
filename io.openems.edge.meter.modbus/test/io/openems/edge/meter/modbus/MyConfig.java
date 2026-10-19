@@ -15,6 +15,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int modbusUnitId = 1;
 		private MeterType type = MeterType.CONSUMPTION_METERED;
 		private Priority priority = Priority.HIGH;
+		private PowerSource powerSource = PowerSource.READ_FROM_REGISTER;
 		private RegisterType powerRegisterType = RegisterType.HOLDING_REGISTERS;
 		private int powerAddress = 0;
 		private Encoding powerEncoding = Encoding.INT32;
@@ -27,6 +28,12 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private Encoding energyEncoding = Encoding.INT32;
 		private WordOrder energyWordOrder = WordOrder.HIGH_WORD_FIRST;
 		private ScaleFactor energyScaleFactor = ScaleFactor.ONE;
+		private boolean reverseEnergyEnabled = false;
+		private RegisterType reverseEnergyRegisterType = RegisterType.HOLDING_REGISTERS;
+		private int reverseEnergyAddress = 0;
+		private Encoding reverseEnergyEncoding = Encoding.INT32;
+		private WordOrder reverseEnergyWordOrder = WordOrder.HIGH_WORD_FIRST;
+		private ScaleFactor reverseEnergyScaleFactor = ScaleFactor.ONE;
 
 		private Builder() {
 		}
@@ -58,6 +65,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setPriority(Priority priority) {
 			this.priority = priority;
+			return this;
+		}
+
+		public Builder setPowerSource(PowerSource powerSource) {
+			this.powerSource = powerSource;
 			return this;
 		}
 
@@ -121,6 +133,36 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
+		public Builder setReverseEnergyEnabled(boolean reverseEnergyEnabled) {
+			this.reverseEnergyEnabled = reverseEnergyEnabled;
+			return this;
+		}
+
+		public Builder setReverseEnergyRegisterType(RegisterType reverseEnergyRegisterType) {
+			this.reverseEnergyRegisterType = reverseEnergyRegisterType;
+			return this;
+		}
+
+		public Builder setReverseEnergyAddress(int reverseEnergyAddress) {
+			this.reverseEnergyAddress = reverseEnergyAddress;
+			return this;
+		}
+
+		public Builder setReverseEnergyEncoding(Encoding reverseEnergyEncoding) {
+			this.reverseEnergyEncoding = reverseEnergyEncoding;
+			return this;
+		}
+
+		public Builder setReverseEnergyWordOrder(WordOrder reverseEnergyWordOrder) {
+			this.reverseEnergyWordOrder = reverseEnergyWordOrder;
+			return this;
+		}
+
+		public Builder setReverseEnergyScaleFactor(ScaleFactor reverseEnergyScaleFactor) {
+			this.reverseEnergyScaleFactor = reverseEnergyScaleFactor;
+			return this;
+		}
+
 		public MyConfig build() {
 			return new MyConfig(this);
 		}
@@ -170,6 +212,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public Priority priority() {
 		return this.builder.priority;
+	}
+
+	@Override
+	public PowerSource powerSource() {
+		return this.builder.powerSource;
 	}
 
 	@Override
@@ -230,6 +277,36 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public ScaleFactor energyScaleFactor() {
 		return this.builder.energyScaleFactor;
+	}
+
+	@Override
+	public boolean reverseEnergyEnabled() {
+		return this.builder.reverseEnergyEnabled;
+	}
+
+	@Override
+	public RegisterType reverseEnergyRegisterType() {
+		return this.builder.reverseEnergyRegisterType;
+	}
+
+	@Override
+	public int reverseEnergyAddress() {
+		return this.builder.reverseEnergyAddress;
+	}
+
+	@Override
+	public Encoding reverseEnergyEncoding() {
+		return this.builder.reverseEnergyEncoding;
+	}
+
+	@Override
+	public WordOrder reverseEnergyWordOrder() {
+		return this.builder.reverseEnergyWordOrder;
+	}
+
+	@Override
+	public ScaleFactor reverseEnergyScaleFactor() {
+		return this.builder.reverseEnergyScaleFactor;
 	}
 
 }

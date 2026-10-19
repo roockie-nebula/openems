@@ -58,7 +58,7 @@ public class MeterSchecoImplTest {
 						.build()) //
 				.next(new TestCase() //
 						// 100000 * 100 = 10_000_000 Wh
-						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, 10_000_000L) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, 10_000_000L) //
 						.output(ElectricityMeter.ChannelId.ACTIVE_POWER, 123456));
 	}
 
@@ -75,7 +75,7 @@ public class MeterSchecoImplTest {
 						.build()) //
 				.next(new TestCase() //
 						// energy is not inverted, only the power is negated
-						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, 10_000_000L) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, 10_000_000L) //
 						.output(ElectricityMeter.ChannelId.ACTIVE_POWER, -123456));
 	}
 
@@ -92,7 +92,7 @@ public class MeterSchecoImplTest {
 						.build()) //
 				.next(new TestCase() //
 						// 70000 * 100 = 7_000_000 Wh
-						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, 7_000_000L) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, 7_000_000L) //
 						.output(ElectricityMeter.ChannelId.ACTIVE_POWER, 80000));
 	}
 
@@ -110,7 +110,7 @@ public class MeterSchecoImplTest {
 						.build()) //
 				.next(new TestCase() //
 						// 50000 * 100 = 5_000_000 Wh
-						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, 5_000_000L) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, 5_000_000L) //
 						.output(ElectricityMeter.ChannelId.ACTIVE_POWER, 60000));
 	}
 
