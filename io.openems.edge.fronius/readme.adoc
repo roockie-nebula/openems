@@ -51,9 +51,23 @@ Integration for Fronius solar PV inverters. Monitors real-time solar generation 
 * `id` (String): Unique component identifier; default: `"pvInverter0"`
 * `alias` (String): Human-readable name; default: same as id
 * `enabled` (Boolean): Enable/disable this component; default: `true`
-* `readOnly` (Boolean): Read-only mode (no power limitation commands sent); default: `true`
+* `readOnly` (Boolean): Read-only mode (no power limitation or connection commands sent); default: `true`
 * `modbus_id` (String): ID of Modbus bridge; default: `"modbus0"`
 * `modbusUnitId` (Integer): Modbus Unit-ID of the inverter; default: `1`
+
+PV inverter measurements support SunSpec models 111/112/113 (`float`) and three-phase model 103 (`int + SF`). OpenEMS discovers the model automatically and applies its scale factors to power and cumulative production energy. Measurements remain available in both read-only and managed mode.
+
+==== Explicit connection control
+
+For Fronius Symo GEN24 10.0 Plus and Verto 30.0, the `SetConnection` write-only channel requests standby (`0`, `DISCONNECT`) or permits grid-feed operation (`1`, `CONNECT`). Both installed firmware versions require commissioning checks. Actual generation still depends on sunlight and grid conditions; zero watts alone does not confirm standby.
+
+Connection control requires `enabled=true`, `readOnly=false`, a discovered SunSpec model 123 with usable connection fields, and working Modbus communication. `enabled` controls this software component, not the inverter's connection setting. `ConnectionControlAvailable` reports whether these conditions currently permit control. `S123Conn` is the numeric inverter readback; missing, invalid or communication-failed readback is unknown. An API acknowledgement accepts a request for processing and does not confirm the physical connection state. Rejected commands set `ConnectionCommandRejected`; transport errors use the existing Modbus warning.
+
+Each accepted command writes `Conn_WinTms=0`, `Conn_RvrtTms=0` and the requested `Conn` together in one FC16 request. The model's raw channels are read-only and unrelated model 123 power/reactive controls are not exposed. No connection command is sent on startup, reconnect or when no command is present. Pending unsent values are cleared on the next command-consumption cycle and during component cleanup.
+
+The existing API worker can repeat a channel command during its active override period (the shipped REST timeout is 60 seconds, shared with other API writes). Override expiry sends no opposite command. During normal inverter operation, standby remains requested until a subsequent ON command; no desired setting is persisted or restored after an inverter reboot or another controller's change. A rejected or failed request may be retried manually after checking readback.
+
+Configure each physical inverter as a separate ROOCKiE device with its own OpenEMS component and Modbus bridge IDs. The gateway maps OFF to `SetConnection=0`; ON and RESET_FALLBACK both map to `SetConnection=1`. Commission both models separately and on the shared runtime, including normal OFF beyond the API timeout, ON/reset, communication loss and restart behavior.
 
 [[_meter_fronius]]
 === Meter Fronius
@@ -98,7 +112,7 @@ Without this configuration, the OpenEMS integration will not read correct values
 PV Inverter has two operating modes:
 
 * **Read-Only Mode** (`readOnly: true`): Only monitors solar generation, no commands sent to inverter
-* **Managed Mode** (`readOnly: false`): Allows OpenEMS controllers to limit active power output
+* **Managed Mode** (`readOnly: false`): Allows connection commands and existing active-power control
 
 Start with read-only mode for testing, then enable managed mode if power limitation is needed.
 
